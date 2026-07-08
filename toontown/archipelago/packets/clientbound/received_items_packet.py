@@ -40,10 +40,14 @@ class ReceivedItemsPacket(ClientBoundPacketBase):
                 new_items.append((reward_index, item.item))
                 self.debug(f"Queued {itemName} from {fromName}")
 
+                # Relay a cosmetic-only notice to other AP-connected toons on the same game
+                # server so they can see this reward too. This does NOT affect their own
+                # Archipelago session, item state, or progression in any way.
+                client.av.d_broadcastAPRewardToOthers(itemName, fromName)
+
             # Incrememnt the reward index and go to the next one
             reward_index += 1
 
         # Now perform an update on the items that this av has received
         items_received.extend(new_items)
         client.av.b_setReceivedItems(items_received)
-

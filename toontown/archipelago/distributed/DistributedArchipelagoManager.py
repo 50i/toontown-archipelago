@@ -236,3 +236,16 @@ class DistributedArchipelagoManager(DistributedObject):
         if not silent and foundNewHint:
             messenger.send('archipelago-hints-updated')
 
+    """
+    Code related to cross-player AP reward visibility (cosmetic only)
+    """
+
+    def receiveAPReward(self, sourceDisplayName, itemName, fromName):
+        """
+        Called from the AI. Purely cosmetic — displays a toast that another
+        AP-connected toon received an item. Does NOT apply any reward locally,
+        does NOT touch received items state, and has no effect on our own
+        Archipelago session.
+        """
+        msg = f"{sourceDisplayName} received: {itemName} (found by {fromName})"
+        base.localAvatar.sendArchipelagoMessages([msg])

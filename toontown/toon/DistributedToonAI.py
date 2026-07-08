@@ -4937,6 +4937,15 @@ class DistributedToonAI(DistributedPlayerAI.DistributedPlayerAI, DistributedSmoo
             privateKeys.extend(ToontownBattleGlobals.Tracks)
         self.get_ap_data(privateKeys, True)
 
+    # Called directly from ReceivedItemsPacket.handle() when this toon's AI-hosted Archipelago
+    # session applies a reward to itself. Relays a cosmetic-only notice to other AP-connected
+    # toons on the same game server via the DistributedArchipelagoManagerAI, so they can see the
+    # reward too. Does NOT affect their own Archipelago session, item state, or progression.
+    # Note: this is a plain in-process method call, not a networked field — the Archipelago
+    # client session runs on the AI itself (toon.archipelago_session), not on the game client.
+    def d_broadcastAPRewardToOthers(self, itemName, fromName):
+        simbase.air.archipelagoManager.broadcastAPReward(self.doId, itemName, fromName)
+
     # AP datastore updates passed to this in form of a dict.
     def handle_ap_data_update(self, data: dict[str,Any]):
         for k,v in data.items():

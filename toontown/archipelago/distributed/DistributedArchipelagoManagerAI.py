@@ -122,6 +122,32 @@ class DistributedArchipelagoManagerAI(DistributedObjectAI):
         # If the teams are not equal, they are enemies.
         return toon1Team != toon2Team
 
+    """
+    Code related to cross-player AP reward visibility (cosmetic only)
+    """
+
+    # Called when a toon receives an AP item locally. Relays a cosmetic-only notice
+    # to all *other* AP-connected toons so they can see it too, without touching
+    # their own item/session state or granting them anything.
+    def broadcastAPReward(self, sourceAvId, itemName, fromName):
+        allApSessions = self.__getAllArchipelagoSessions()
+        sourceToon = self.__getToon(sourceAvId)
+        if sourceToon is None:
+            return
+
+        sourceDisplayName = sourceToon.getName()
+
+        for session in allApSessions:
+            targetAvId = session.avatar.doId
+
+            # Don't echo the reward back to the toon that already saw it themselves
+            if targetAvId == sourceAvId:
+                continue
+
+            self.d_broadcastAPReward(targetAvId, sourceDisplayName, itemName, fromName)
+
+    def d_broadcastAPReward(self, targetAvId, sourceDisplayName, itemName, fromName):
+        self.sendUpdateToAvatarId(targetAvId, 'receiveAPReward', [sourceDisplayName, itemName, fromName])
 
     """
     Code related to hint management
@@ -156,7 +182,6 @@ class DistributedArchipelagoManagerAI(DistributedObjectAI):
         Send multiple hints to a player for them to additively cache them locally
         """
         self.sendUpdateToAvatarId(avId, 'addHints', [hint.to_struct() for hint in hints])
-
 
     """
     Boilerplate astron code throw up emoji

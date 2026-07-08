@@ -3994,6 +3994,7 @@ dclass DistributedArchipelagoManager : DistributedObject {
   setHints(ArchipelagoHint[]);
   addHint(ArchipelagoHint);
   addHints(ArchipelagoHint[]);
+  receiveAPReward(string, string, string);
 };
 
 dclass DistributedInGameNewsMgr : DistributedObjectGlobal {
