@@ -24,6 +24,7 @@ class TradeGUI(DirectFrame):
         self.targets = []
         self.offerItems = []
         self.requestItems = []
+        self.requestItemsReady = False
         self.targetIndex = 0
         self.offerIndex = 0
         self.requestIndex = 0
@@ -166,11 +167,14 @@ class TradeGUI(DirectFrame):
         else:
             self.hide()
 
-    def refresh(self):
+    def refresh(self, requestInventories=True):
         manager = getattr(base.cr, 'archipelagoManager', None)
         self.targets = manager.getAllTradeTargets() if manager is not None else []
         self.offerItems = []
         self.targetIndex = self._clampIndex(self.targetIndex, self.targets)
+        if requestInventories and manager is not None:
+            manager.d_requestTradeInventories()
+        self.requestItemsReady = self._targetInventoryIsReady()
         self.requestItems = self._getTargetOwnedItems()
 
         debtItemIds = set(debt[1] for debt in base.localAvatar.getAPTradeDebts())
@@ -186,22 +190,18 @@ class TradeGUI(DirectFrame):
         self._refreshLabels()
 
     def _getTargetOwnedItems(self):
-        if not self.targets:
+        if not self.targets or not self.requestItemsReady:
             return []
 
         targetAvId = self.targets[self.targetIndex]
-        target = base.cr.doId2do.get(targetAvId)
-        if target is None or not hasattr(target, 'getReceivedItems'):
+        manager = getattr(base.cr, 'archipelagoManager', None)
+        if manager is None:
             return []
-
-        debtItemIds = set()
-        if hasattr(target, 'getAPTradeDebts'):
-            debtItemIds = set(debt[1] for debt in target.getAPTradeDebts())
 
         items = []
         seenItemIds = set()
-        for _rewardIndex, itemId in target.getReceivedItems():
-            if itemId in seenItemIds or itemId in debtItemIds:
+        for _rewardIndex, itemId in manager.getTradeInventory(targetAvId):
+            if itemId in seenItemIds:
                 continue
             itemDef = get_item_def_from_id(itemId)
             if itemDef is None:
@@ -210,10 +210,19 @@ class TradeGUI(DirectFrame):
             items.append((itemId, itemDef.name.value))
         return sorted(items, key=lambda value: value[1])
 
+    def _targetInventoryIsReady(self):
+        if not self.targets:
+            return False
+        manager = getattr(base.cr, 'archipelagoManager', None)
+        if manager is None:
+            return False
+        return manager.hasTradeInventory(self.targets[self.targetIndex])
+
     def openForTarget(self, avId):
         self.refresh()
         if avId in self.targets:
             self.targetIndex = self.targets.index(avId)
+            self.requestItemsReady = self._targetInventoryIsReady()
             self.requestItems = self._getTargetOwnedItems()
             self.requestIndex = self._clampIndex(self.requestIndex, self.requestItems)
         self._refreshLabels()
@@ -235,6 +244,9 @@ class TradeGUI(DirectFrame):
             self.sendButton['state'] = DGG.DISABLED
         elif not self.offerItems:
             self.statusLabel['text'] = "No AP items received yet."
+            self.sendButton['state'] = DGG.DISABLED
+        elif not self.requestItemsReady:
+            self.statusLabel['text'] = "Loading target items..."
             self.sendButton['state'] = DGG.DISABLED
         elif not self.requestItems:
             self.statusLabel['text'] = "Target has no tradeable AP items."
@@ -300,6 +312,7 @@ class TradeGUI(DirectFrame):
             self.targetIndex = 0
         else:
             self.targetIndex = (self.targetIndex + delta) % len(self.targets)
+        self.requestItemsReady = self._targetInventoryIsReady()
         self.requestItems = self._getTargetOwnedItems()
         self.requestIndex = self._clampIndex(self.requestIndex, self.requestItems)
         self._refreshLabels()

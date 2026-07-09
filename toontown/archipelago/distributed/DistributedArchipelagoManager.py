@@ -45,6 +45,7 @@ class DistributedArchipelagoManager(DistributedObject):
         self.notify.debug("DistributedArchipelagoManager starting up....")
 
         self._ap_info_cache: Dict[int, ArchipelagoInformation] = {}
+        self._trade_inventory_cache: Dict[int, List[List[int]]] = {}
         self._tradeDialog = None
         self._tradeRequesterAvId = None
 
@@ -265,6 +266,21 @@ class DistributedArchipelagoManager(DistributedObject):
     """
     Code related to AP trade escrow
     """
+
+    def d_requestTradeInventories(self):
+        self.sendUpdate('requestTradeInventories')
+
+    def tradeInventories(self, inventories):
+        self._trade_inventory_cache = {avId: items for avId, items in inventories}
+        tradeGui = getattr(base.localAvatar, 'tradeGui', None)
+        if tradeGui is not None and not tradeGui.isHidden():
+            tradeGui.refresh(requestInventories=False)
+
+    def getTradeInventory(self, avId):
+        return self._trade_inventory_cache.get(avId, [])
+
+    def hasTradeInventory(self, avId):
+        return avId in self._trade_inventory_cache
 
     def d_requestTrade(self, targetAvId, offerIndex, offerItemId, requestedItemId):
         self.sendUpdate('requestTrade', [targetAvId, offerIndex, offerItemId, requestedItemId])

@@ -3845,7 +3845,7 @@ class Fix(MagicWord):
     aliases = ['fix']
     desc = "Opens the AP progression fix GUI."
     execLocation = MagicWordConfig.EXEC_LOC_CLIENT
-    accessLevel = 'USER'
+    accessLevel = 'NO_ACCESS'
 
     def handleWord(self, invoker, avId, toon, *args):
         if invoker != toon:

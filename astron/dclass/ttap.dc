@@ -983,6 +983,11 @@ struct APTradeDebt {
   string recipientName;
 }
 
+struct APTradeInventory {
+  uint32 avId;
+  APItem[] items;
+}
+
 
 dclass DistributedToon : DistributedPlayer {
   setDNAString(blob) required broadcast ownrecv db;
@@ -4011,6 +4016,8 @@ dclass DistributedArchipelagoManager : DistributedObject {
   addHint(ArchipelagoHint);
   addHints(ArchipelagoHint[]);
   receiveAPReward(string, string, string);
+  requestTradeInventories() clsend airecv;
+  tradeInventories(APTradeInventory[]);
   requestTrade(uint32, uint64, uint64, uint64) clsend airecv;
   respondTrade(uint32, uint8) clsend airecv;
   tradeRequest(uint32, string, uint64, uint64, uint64, string, string);

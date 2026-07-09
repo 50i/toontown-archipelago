@@ -177,6 +177,26 @@ class DistributedArchipelagoManagerAI(DistributedObjectAI):
                 return receivedIndex
         return None
 
+    def __getTradeInventoryStruct(self, toon):
+        debtItemIds = {debt[1] for debt in toon.getAPTradeDebts()}
+        items = []
+        seenItemIds = set()
+        for receivedIndex, itemId in toon.getReceivedItems():
+            if itemId in seenItemIds or itemId in debtItemIds:
+                continue
+            if self.__getItemName(itemId) is None:
+                continue
+            seenItemIds.add(itemId)
+            items.append((receivedIndex, itemId))
+        return [toon.doId, items]
+
+    def requestTradeInventories(self):
+        avId = self.air.getAvatarIdFromSender()
+        inventories = []
+        for session in self.__getAllArchipelagoSessions():
+            inventories.append(self.__getTradeInventoryStruct(session.avatar))
+        self.sendUpdateToAvatarId(avId, 'tradeInventories', [inventories])
+
     def __nextTradeIndex(self, toon, senderAvId, itemId):
         index = 900000000000 + (senderAvId * 1000000) + itemId
         usedIndexes = {receivedIndex for receivedIndex, _itemId in toon.getReceivedItems()}
