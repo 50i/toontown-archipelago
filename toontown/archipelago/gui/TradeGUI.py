@@ -18,15 +18,15 @@ ACCENT = (0.52, 0.87, 1.0, 1.0)
 
 
 class TradeGUI(DirectFrame):
-    """Compact AP item-for-hint trade panel."""
+    """Compact AP item-for-item trade panel."""
 
     def __init__(self):
         self.targets = []
         self.offerItems = []
-        self.hintItems = sorted((item_id, name) for name, item_id in ITEM_NAME_TO_ID.items())
+        self.requestItems = sorted((item_id, name) for name, item_id in ITEM_NAME_TO_ID.items())
         self.targetIndex = 0
         self.offerIndex = 0
-        self.hintIndex = 0
+        self.requestIndex = 0
 
         DirectFrame.__init__(
             self,
@@ -82,11 +82,11 @@ class TradeGUI(DirectFrame):
 
         self.targetValue = self._makeValueLabel(0.16)
         self.offerValue = self._makeValueLabel(0.00)
-        self.hintValue = self._makeValueLabel(-0.16)
+        self.requestValue = self._makeValueLabel(-0.16)
 
         self._makeCycleRow("Target", 0.18, self.previousTarget, self.nextTarget)
         self._makeCycleRow("Give", 0.02, self.previousOffer, self.nextOffer)
-        self._makeCycleRow("Hint", -0.14, self.previousHint, self.nextHint)
+        self._makeCycleRow("Want", -0.14, self.previousRequest, self.nextRequest)
 
         self.sendButton = self._makeButton("Send", (0.29, 0, 0.29), self.sendTrade, width=0.22, height=0.08)
 
@@ -172,7 +172,7 @@ class TradeGUI(DirectFrame):
 
         self.targetIndex = self._clampIndex(self.targetIndex, self.targets)
         self.offerIndex = self._clampIndex(self.offerIndex, self.offerItems)
-        self.hintIndex = self._clampIndex(self.hintIndex, self.hintItems)
+        self.requestIndex = self._clampIndex(self.requestIndex, self.requestItems)
         self._refreshLabels()
 
     def openForTarget(self, avId):
@@ -190,7 +190,7 @@ class TradeGUI(DirectFrame):
     def _refreshLabels(self):
         self.targetValue['text'] = self._getTargetLabel()
         self.offerValue['text'] = self._getOfferLabel()
-        self.hintValue['text'] = self._getHintLabel()
+        self.requestValue['text'] = self._getRequestLabel()
         self.debtLabel['text'] = self._getDebtLabel()
 
         if not self.targets:
@@ -223,10 +223,10 @@ class TradeGUI(DirectFrame):
             return f"{name} (recovering)"
         return name
 
-    def _getHintLabel(self):
-        if not self.hintItems:
+    def _getRequestLabel(self):
+        if not self.requestItems:
             return "No items"
-        return self.hintItems[self.hintIndex][1]
+        return self.requestItems[self.requestIndex][1]
 
     def _getDebtLabel(self):
         debts = base.localAvatar.getAPTradeDebts()
@@ -267,23 +267,23 @@ class TradeGUI(DirectFrame):
     def nextOffer(self):
         self._cycle('offerIndex', self.offerItems, 1)
 
-    def previousHint(self):
-        self._cycle('hintIndex', self.hintItems, -1)
+    def previousRequest(self):
+        self._cycle('requestIndex', self.requestItems, -1)
 
-    def nextHint(self):
-        self._cycle('hintIndex', self.hintItems, 1)
+    def nextRequest(self):
+        self._cycle('requestIndex', self.requestItems, 1)
 
     def sendTrade(self):
         self.refresh()
-        if not self.targets or not self.offerItems or not self.hintItems:
+        if not self.targets or not self.offerItems or not self.requestItems:
             return
         if self.offerItems[self.offerIndex][3]:
             return
 
         targetAvId = self.targets[self.targetIndex]
         rewardIndex, offerItemId, _offerName, _locked = self.offerItems[self.offerIndex]
-        hintItemId, _hintName = self.hintItems[self.hintIndex]
-        base.cr.archipelagoManager.d_requestTrade(targetAvId, rewardIndex, offerItemId, hintItemId)
+        requestedItemId, _requestedName = self.requestItems[self.requestIndex]
+        base.cr.archipelagoManager.d_requestTrade(targetAvId, rewardIndex, offerItemId, requestedItemId)
         self.statusLabel['text'] = "Trade sent."
 
     def destroy(self):

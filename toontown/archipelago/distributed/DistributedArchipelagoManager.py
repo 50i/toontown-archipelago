@@ -266,18 +266,19 @@ class DistributedArchipelagoManager(DistributedObject):
     Code related to AP trade escrow
     """
 
-    def d_requestTrade(self, targetAvId, offerIndex, offerItemId, hintItemId):
-        self.sendUpdate('requestTrade', [targetAvId, offerIndex, offerItemId, hintItemId])
+    def d_requestTrade(self, targetAvId, offerIndex, offerItemId, requestedItemId):
+        self.sendUpdate('requestTrade', [targetAvId, offerIndex, offerItemId, requestedItemId])
 
     def d_respondTrade(self, requesterAvId, accepted):
         self.sendUpdate('respondTrade', [requesterAvId, 1 if accepted else 0])
 
-    def tradeRequest(self, requesterAvId, requesterName, offerIndex, offerItemId, hintItemId, offerName, hintName):
+    def tradeRequest(self, requesterAvId, requesterName, offerIndex, offerItemId, requestedItemId, offerName, requestedName):
         self._cleanupTradeDialog()
         self._tradeRequesterAvId = requesterAvId
         self._tradeDialog = DirectFrame(
             parent=aspect2dp,
-            relief=DGG.FLAT,
+            relief=DGG.RIDGE,
+            borderWidth=(0.012, 0.012),
             frameColor=(0.06, 0.075, 0.09, 0.94),
             frameSize=(-0.42, 0.42, -0.18, 0.18),
             pos=(0.62, 0, 0.58)
@@ -300,7 +301,7 @@ class DistributedArchipelagoManager(DistributedObject):
         DirectLabel(
             parent=self._tradeDialog,
             relief=None,
-            text=f"Give you: {offerName}\nFor their free hint: {hintName}",
+            text=f"They give: {offerName}\nYou give: {requestedName}",
             text_scale=0.03,
             text_fg=(0.82, 0.88, 0.92, 1),
             text_wordwrap=24,
