@@ -5,8 +5,10 @@ from direct.gui.DirectButton import DirectButton
 from direct.gui.DirectFrame import DirectFrame
 from direct.gui.DirectLabel import DirectLabel
 from panda3d.core import TextNode, TransparencyAttrib
+
 YOFFSET = 0.265
 BOTTOM_X = -0.185
+AP_TOGGLE_POS = (1.15, 0.0, 0.7)
 class ArchipelagoConnectGUI(DirectFrame):
 
     def __init__(self):
@@ -14,6 +16,19 @@ class ArchipelagoConnectGUI(DirectFrame):
         self.cdrGui = loader.loadModel('phase_3.5/models/gui/tt_m_gui_sbk_codeRedemptionGui')
         DirectFrame.__init__(self, parent=aspect2dp, relief=None, image=self.cdrGui.find('**/tt_t_gui_sbk_cdrCodeBox'), pos=(-0.46, 0.0, 0.53), scale=(1.0, 1.0, 1.0))
         self.load()
+        self.hide()
+
+    def toggleVisibility(self):
+        if self.isHidden():
+            self.show()
+            self.updateFields()
+        else:
+            self.hide()
+
+    def destroy(self):
+        if hasattr(self, 'toggleButton'):
+            self.toggleButton.destroy()
+        DirectFrame.destroy(self)
 
     def load(self):
         self.container_frame = DirectFrame(parent=self, relief=None, image=DGG.getDefaultDialogGeom(),
@@ -98,8 +113,13 @@ class ArchipelagoConnectGUI(DirectFrame):
         base.talkAssistant.sendOpenTalk(f"~ap password {self.passBarEntry.get()}")
         base.talkAssistant.sendOpenTalk(f"~ap connect {self.ipBarEntry.get()}")
         self.toggleEntryFocus(True)
+        # chatMgr no longer owns any Archipelago GUI state, but it may still expose
+        # this popup-mimic helper elsewhere -- guard it instead of assuming it exists.
         if base.settings.get('new-popup'):
-            base.localAvatar.chatMgr.mimicApButtonPressed()
+            chatMgr = getattr(base.localAvatar, 'chatMgr', None)
+            mimic = getattr(chatMgr, 'mimicApButtonPressed', None)
+            if mimic is not None:
+                mimic()
 
     def handleDisconnect(self):
         base.talkAssistant.sendOpenTalk("~ap disconnect")

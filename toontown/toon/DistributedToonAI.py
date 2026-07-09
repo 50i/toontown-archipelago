@@ -45,7 +45,7 @@ from toontown.archipelago.apclient.archipelago_session import ArchipelagoSession
 from ..archipelago.apclient.distributed_toon_apmessage_queue import DistributedToonAPMessageQueue
 from ..archipelago.apclient.distributed_toon_reward_queue import DistributedToonRewardQueue
 from ..archipelago.definitions.death_reason import DeathReason
-from ..archipelago.definitions.rewards import EarnedAPReward
+from ..archipelago.definitions.rewards import EarnedAPReward, TrapReward
 from ..archipelago.definitions.util import ap_location_name_to_id
 from ..archipelago.util import win_condition
 from ..archipelago.util.HintContainer import HintedItem
@@ -245,6 +245,7 @@ class DistributedToonAI(DistributedPlayerAI.DistributedPlayerAI, DistributedSmoo
         self.archipelago_session: ArchipelagoSession = None
         self.apRewardQueue: DistributedToonRewardQueue = DistributedToonRewardQueue(self)
         self.apMessageQueue: DistributedToonAPMessageQueue = DistributedToonAPMessageQueue(self)
+        self.heldTraps: List[EarnedAPReward] = []  # Trap-type rewards held to be fired at a chosen target later
         self.deathReason: DeathReason = DeathReason.UNKNOWN
         self.slotData = {}  # set in connected_packet.py
         self.winCondition = win_condition.NoWinCondition(self)
@@ -4809,7 +4810,57 @@ class DistributedToonAI(DistributedPlayerAI.DistributedPlayerAI, DistributedSmoo
         self.setSeed(seed)
 
     def queueAPReward(self, reward: EarnedAPReward):
+        # Traps get held instead of auto-applying, so the player can fire them at a target later
+        if isinstance(reward.reward, TrapReward):
+            self.holdTrap(reward)
+            return
         self.apRewardQueue.queue(reward)
+
+    # Stash a trap reward instead of applying it, and let the owning client know what it's holding
+    def holdTrap(self, reward: EarnedAPReward):
+        self.heldTraps.append(reward)
+        self.d_setHeldTraps()
+
+    def d_setHeldTraps(self):
+        summary = [(index, reward.itemId) for index, reward in enumerate(self.heldTraps)]
+        self.sendUpdate('setHeldTraps', [summary])
+
+    # Sent by the owning client when they press the "use" button on a held trap.
+    # We resolve the target ourselves rather than trusting a client-supplied doId --
+    # the two AP players won't necessarily share a zone, so the client can't reliably
+    # know the opponent's doId itself. self.air.doId2do covers every avatar this AI
+    # process manages, not just whatever's in our own zone of interest.
+    def useHeldTrap(self, index: int):
+        if not self.isPlayerControlled():
+            return
+
+        if index < 0 or index >= len(self.heldTraps):
+            self.d_sendArchipelagoMessage("That trap isn't in your inventory anymore.")
+            return
+
+        target = self._findTrapOpponent()
+        if target is None:
+            self.d_sendArchipelagoMessage("No opponent found to trap!")
+            return
+
+        reward = self.heldTraps.pop(index)
+        self.d_setHeldTraps()
+
+        # Redirect the reward onto the opponent and let it apply as normal
+        reward.av = target
+        reward.fromName = self.getName()
+        reward.isLocal = (target.doId == self.doId)
+        reward.apply()
+
+    # Finds the other AP-controlled player toon anywhere on the shard.
+    # Assumes exactly two AP-controlled toons exist (you + your friend).
+    def _findTrapOpponent(self):
+        for doId, obj in self.air.doId2do.items():
+            if obj is self:
+                continue
+            if hasattr(obj, 'isPlayerControlled') and obj.isPlayerControlled():
+                return obj
+        return None
 
     # Can be called either from the AI directly or via an astron update from the client.
     # When we are given a string, we know that it is from the client so we need to make sure

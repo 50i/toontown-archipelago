@@ -65,6 +65,12 @@ class APReward:
         raise NotImplementedError("Please implement the apply() method!")
 
 
+# Marker mixin. Rewards that inherit this are held instead of auto-applying to the receiver,
+# so they can later be fired at an arbitrary target toon (see DistributedToonAI.useHeldTrap).
+class TrapReward:
+    pass
+
+
 class LaffBoostReward(APReward):
     def __init__(self, amount: int):
         self.amount = amount
@@ -651,7 +657,7 @@ class FishReward(APReward):
         av.playSound(sound)
 
 
-class DamageTrapAward(APReward):
+class DamageTrapAward(APReward, TrapReward):
 
     def __init__(self, amount: int):
         self.amount: int = amount
@@ -684,7 +690,7 @@ class DamageTrapAward(APReward):
         av.d_playEmote(EmoteFuncDict['Banana Peel'], 1)
 
 
-class UberTrapAward(APReward):
+class UberTrapAward(APReward, TrapReward):
 
     def formatted_header(self) -> str:
         return global_text_properties.get_raw_formatted_string([
@@ -707,7 +713,7 @@ class UberTrapAward(APReward):
         av.d_playEmote(EmoteFuncDict['Cry'], 1)
 
 
-class BeanTaxTrapAward(APReward):
+class BeanTaxTrapAward(APReward, TrapReward):
     def __init__(self, tax: int):
         self.tax: int = tax
 
@@ -754,7 +760,7 @@ class BeanTaxTrapAward(APReward):
             av.d_playEmote(EmoteFuncDict['Belly Flop'], 1)
 
 
-class DripTrapAward(APReward):
+class DripTrapAward(APReward, TrapReward):
 
     def formatted_header(self) -> str:
         return global_text_properties.get_raw_formatted_string([
@@ -773,7 +779,7 @@ class DripTrapAward(APReward):
         av.d_playEmote(EmoteFuncDict['Surprise'], 1)
 
 
-class GagShuffleAward(APReward):
+class GagShuffleAward(APReward, TrapReward):
 
     def formatted_header(self) -> str:
         return global_text_properties.get_raw_formatted_string([

@@ -273,6 +273,8 @@ class DistributedToon(DistributedPlayer.DistributedPlayer, Toon.Toon, Distribute
             self.tunnelTrack = None
         self.setTrophyScore(0)
         self.removeGMIcon()
+        self._teardownArchipelagoGui()
+        self._teardownTrapsGui()
         if self.doId in self.cr.toons:
             del self.cr.toons[self.doId]
         DistributedPlayer.DistributedPlayer.disable(self)
@@ -368,6 +370,10 @@ class DistributedToon(DistributedPlayer.DistributedPlayer, Toon.Toon, Distribute
                 # Update our online player manager to cache what we seen here. This allows us to catch name changes.
                 base.cr.onlinePlayerManager.cacheOnlineToon(self, overwrite=True)
                 messenger.send(f"{self.getDoId()}-postGenerate", [self.getDoId()])
+            else:
+                # This is our own toon -- bring up the persistent Archipelago
+                # connect/held-traps panel now that we're fully generated.
+                self._setupTrapsGui()
 
 
     def _handleClientCleanup(self):
@@ -2926,6 +2932,47 @@ class DistributedToon(DistributedPlayer.DistributedPlayer, Toon.Toon, Distribute
     # To be overridden in LocalToon, just here for safety
     def showReward(self, rewardId: int, playerName: str, isLocal: bool) -> None:
         pass
+
+    # Server tells us what trap items we're currently holding: list of (index, itemId).
+    # This is an ownrecv field, so it only ever arrives on our own localAvatar instance --
+    # no need to go looking for base.localAvatar separately, self is already it.
+    def setHeldTraps(self, heldTraps: List[Tuple[int, int]]) -> None:
+        self.heldTraps = heldTraps
+        trapGui = getattr(self, 'trapGui', None)
+        if trapGui is not None:
+            trapGui.refresh(heldTraps)
+
+    def getHeldTraps(self) -> List[Tuple[int, int]]:
+        return getattr(self, 'heldTraps', [])
+
+    # Call from a GUI button to fire a held trap (by its index). The AI resolves
+    # who the opponent is -- we don't need (and can't reliably know) their doId.
+    def d_useHeldTrap(self, index: int) -> None:
+        self.sendUpdate('useHeldTrap', [index])
+
+    # Lazily builds our standalone held-traps panel. Fully separate from the AP
+    # connect GUI above -- its own background/buttons/labels/toggle.
+    def _setupTrapsGui(self) -> None:
+        if getattr(self, 'trapGui', None) is not None:
+            return
+        from toontown.archipelago.gui.TrapsGUI import TrapsGUI
+        self.trapGui = TrapsGUI()
+        # setHeldTraps (a required field) is delivered during generate(), before
+        # announceGenerate() -- and therefore before this GUI exists. Sync it up
+        # now so we don't miss whatever the server already told us we're holding.
+        self.trapGui.refresh(self.getHeldTraps())
+
+    def _teardownArchipelagoGui(self) -> None:
+        apGui = getattr(self, 'apGui', None)
+        if apGui is not None:
+            apGui.destroy()
+            self.apGui = None
+
+    def _teardownTrapsGui(self) -> None:
+        trapGui = getattr(self, 'trapGui', None)
+        if trapGui is not None:
+            trapGui.destroy()
+            self.trapGui = None
 
     # To be overridden in LocalToon, just here for safety
     def updateLocationScoutsCache(self, cacheTuples: List[Tuple[int, str]]) -> None:
