@@ -53,7 +53,7 @@ from ..archipelago.util.HintContainer import HintedItem
 from ..archipelago.util.location_scouts_cache import LocationScoutsCache
 from ..shtiker import CogPageGlobals
 from ..util.astron.AstronDict import AstronDict
-from apworld.toontown import locations
+from apworld.toontown import get_item_def_from_id, locations
 
 if simbase.wantPets:
     from toontown.pets import PetLookerAI, PetObserve
@@ -250,6 +250,7 @@ class DistributedToonAI(DistributedPlayerAI.DistributedPlayerAI, DistributedSmoo
         self.apRewardQueue: DistributedToonRewardQueue = DistributedToonRewardQueue(self)
         self.apMessageQueue: DistributedToonAPMessageQueue = DistributedToonAPMessageQueue(self)
         self.heldTraps: List[EarnedAPReward] = []  # Trap-type rewards held to be fired at a chosen target later
+        self.lastTrapUseTime = 0
         self.deathReason: DeathReason = DeathReason.UNKNOWN
         self.slotData = {}  # set in connected_packet.py
         self.winCondition = win_condition.NoWinCondition(self)
@@ -4982,6 +4983,15 @@ class DistributedToonAI(DistributedPlayerAI.DistributedPlayerAI, DistributedSmoo
             self.d_sendArchipelagoMessage("No opponent found to trap!")
             return
 
+        now = time.time()
+        remainingCooldown = 2.0 - (now - self.lastTrapUseTime)
+        if remainingCooldown > 0:
+            self.heldTraps.insert(trapIndex, reward)
+            self.b_setHeldTraps(self.heldTraps)
+            self.d_sendArchipelagoMessage(f"Trap cooldown: {remainingCooldown:.1f}s")
+            return
+        self.lastTrapUseTime = now
+
         reflected = (not selfTarget) and target.isTrapReflectActive()
         if reflected:
             remainingCharges = target.consumeTrapReflectCharge()
@@ -4998,6 +5008,33 @@ class DistributedToonAI(DistributedPlayerAI.DistributedPlayerAI, DistributedSmoo
         reward.isLocal = (target.doId == self.doId)
         reward.firer = self
         reward.apply()
+
+    def d_openFixGui(self):
+        self.sendUpdate('openFixGui', [])
+
+    def requestFixUnlock(self, itemId: int):
+        if not self.isPlayerControlled():
+            return
+
+        try:
+            itemId = int(itemId)
+        except (TypeError, ValueError):
+            self.d_sendArchipelagoMessage("Invalid fix unlock.")
+            return
+
+        rewardDefinition = get_ap_reward_from_id(itemId)
+        itemDefinition = get_item_def_from_id(itemId)
+        if itemDefinition is None or rewardDefinition.__class__.__name__ == 'UndefinedReward':
+            self.d_sendArchipelagoMessage("That fix unlock is not a valid AP item.")
+            return
+
+        rewardIndex = int(time.time() * 1000)
+        usedIndexes = {index for index, _itemId in self.getReceivedItems()}
+        while rewardIndex in usedIndexes:
+            rewardIndex += 1
+        self.queueAPReward(EarnedAPReward(self, rewardDefinition, rewardIndex, itemId, "Fix", True))
+        self.addReceivedItem(rewardIndex, itemId)
+        self.d_sendArchipelagoMessage(f"Fix unlock queued: {itemDefinition.name.value}")
 
     def getTrapReflectUntil(self):
         return self.trapReflectUntil

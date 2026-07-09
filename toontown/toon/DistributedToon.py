@@ -2967,6 +2967,18 @@ class DistributedToon(DistributedPlayer.DistributedPlayer, Toon.Toon, Distribute
     def d_useHeldTrap(self, index: int) -> None:
         self.sendUpdate('useHeldTrap', [index])
 
+    def openFixGui(self) -> None:
+        if self is not getattr(base, 'localAvatar', None):
+            return
+        if getattr(self, 'fixGui', None) is None:
+            from toontown.archipelago.gui.FixGUI import FixGUI
+            self.fixGui = FixGUI()
+        self.fixGui.refresh()
+        self.fixGui.show()
+
+    def d_requestFixUnlock(self, itemId: int) -> None:
+        self.sendUpdate('requestFixUnlock', [int(itemId)])
+
     def setTrapReflectUntil(self, trapReflectUntil: int) -> None:
         self.trapReflectUntil = int(trapReflectUntil)
         if self is getattr(base, 'localAvatar', None):

@@ -31,7 +31,8 @@ class TradeGUI(DirectFrame):
         DirectFrame.__init__(
             self,
             parent=aspect2dp,
-            relief=DGG.FLAT,
+            relief=DGG.RIDGE,
+            borderWidth=(0.018, 0.018),
             frameColor=PANEL_BG,
             frameSize=(-0.46, 0.46, -0.39, 0.39),
             pos=PANEL_POS

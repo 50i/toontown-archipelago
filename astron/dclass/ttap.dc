@@ -1196,6 +1196,8 @@ dclass DistributedToon : DistributedPlayer {
   showReward(int64, string, bool) ownrecv;
   setHeldTraps(APItem[] = []) required ownrecv db;
   useHeldTrap(uint32) ownsend airecv;
+  openFixGui() ownrecv;
+  requestFixUnlock(uint64) ownsend airecv;
   setTrapReflectUntil(uint32 = 0) required ownrecv db;
   setTrapReflectCharges(uint8 = 0) required ownrecv db;
   updateLocationScoutsCache(LocationScoutsCache[]) ownrecv;

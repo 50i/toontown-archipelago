@@ -3841,6 +3841,19 @@ class Archipelago(MagicWord):
         return f"Invalid argument"
 
 
+class Fix(MagicWord):
+    aliases = ['fix']
+    desc = "Opens the AP progression fix GUI."
+    execLocation = MagicWordConfig.EXEC_LOC_CLIENT
+    accessLevel = 'USER'
+
+    def handleWord(self, invoker, avId, toon, *args):
+        if invoker != toon:
+            return "You can only open the fix GUI for yourself!"
+        toon.openFixGui()
+        return "Opened fix GUI."
+
+
 # Command that forces your state to the 'Walk' state.
 # Used in rare circumstances where your toon gets softlocked to prevent having to restart the game.
 # Note: This is still a cheat so it should only be used when needed, as there are many scenarios where you

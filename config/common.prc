@@ -1,6 +1,5 @@
 # Server settings
-version v0.19.7 Alpha
-
+version v0.19.7 Alpha (Versus Mod)
 
 server-version tt-ap-edition
 
