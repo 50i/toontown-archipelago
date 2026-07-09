@@ -1,10 +1,10 @@
-from direct.gui.DirectGui import DirectFrame, DirectButton, DirectLabel, DGG
+from direct.gui.DirectGui import DirectFrame, DirectButton, DirectLabel, DirectScrolledList, DGG
 from panda3d.core import TextNode
 
 from apworld.toontown.items import get_item_def_from_id
 
 
-PANEL_POS = (0.74, 0.0, 0.08)
+PANEL_POS = (0.62, 0.0, 0.02)
 TOGGLE_POS = (1.18, 0.0, 0.78)
 
 PANEL_BG = (0.08, 0.10, 0.13, 0.92)
@@ -25,6 +25,7 @@ class TradeGUI(DirectFrame):
         self.offerItems = []
         self.requestItems = []
         self.requestItemsReady = False
+        self.raidMode = False
         self.targetIndex = 0
         self.offerIndex = 0
         self.requestIndex = 0
@@ -35,7 +36,7 @@ class TradeGUI(DirectFrame):
             relief=DGG.RIDGE,
             borderWidth=(0.018, 0.018),
             frameColor=PANEL_BG,
-            frameSize=(-0.46, 0.46, -0.39, 0.39),
+            frameSize=(-0.52, 0.52, -0.58, 0.58),
             pos=PANEL_POS
         )
 
@@ -43,7 +44,7 @@ class TradeGUI(DirectFrame):
             parent=self,
             relief=DGG.FLAT,
             frameColor=PANEL_EDGE,
-            frameSize=(-0.46, 0.46, 0.36, 0.39),
+            frameSize=(-0.52, 0.52, 0.52, 0.58),
             pos=(0, 0, 0)
         )
 
@@ -52,8 +53,8 @@ class TradeGUI(DirectFrame):
             relief=DGG.RIDGE,
             borderWidth=(0.01, 0.01),
             frameColor=(0.035, 0.045, 0.06, 0.86),
-            frameSize=(-0.40, 0.40, -0.235, 0.235),
-            pos=(0, 0, 0.005)
+            frameSize=(-0.45, 0.45, -0.405, 0.245),
+            pos=(0, 0, -0.06)
         )
 
         self.titleLabel = DirectLabel(
@@ -63,7 +64,7 @@ class TradeGUI(DirectFrame):
             text_scale=0.052,
             text_fg=TEXT,
             text_align=TextNode.ALeft,
-            pos=(-0.39, 0, 0.29)
+            pos=(-0.43, 0, 0.45)
         )
 
         self.statusLabel = DirectLabel(
@@ -75,7 +76,7 @@ class TradeGUI(DirectFrame):
             text_wordwrap=22,
             text_align=TextNode.ACenter,
             textMayChange=1,
-            pos=(0, 0, -0.32)
+            pos=(0, 0, -0.51)
         )
 
         self.debtLabel = DirectLabel(
@@ -87,18 +88,23 @@ class TradeGUI(DirectFrame):
             text_wordwrap=23,
             text_align=TextNode.ACenter,
             textMayChange=1,
-            pos=(0, 0, -0.255)
+            pos=(0, 0, -0.45)
         )
 
-        self.targetValue = self._makeValueLabel(0.16)
-        self.offerValue = self._makeValueLabel(0.00)
-        self.requestValue = self._makeValueLabel(-0.16)
+        self.offerButtons = []
+        self.requestButtons = []
 
-        self._makeCycleRow("Target", 0.18, self.previousTarget, self.nextTarget)
-        self._makeCycleRow("Give", 0.02, self.previousOffer, self.nextOffer)
-        self._makeCycleRow("Want", -0.14, self.previousRequest, self.nextRequest)
+        self.targetValue = self._makeValueLabel(0.31)
+        self.offerValue = self._makeValueLabel(0, 0, 1)
+        self.requestValue = self._makeValueLabel(0, 0, 1)
+        self.offerValue.hide()
+        self.requestValue.hide()
 
-        self.sendButton = self._makeButton("Send", (0.29, 0, 0.29), self.sendTrade, width=0.22, height=0.08)
+        self._makeCycleRow("Target", 0.33, self.previousTarget, self.nextTarget)
+        self._makeItemPicker("Give", 0.09, True)
+        self._makeItemPicker("Want", -0.23, False)
+
+        self.sendButton = self._makeButton("Send", (0.32, 0, 0.45), self.sendTrade, width=0.18, height=0.075)
 
         self.hide()
         self._loadToggleButton()
@@ -134,17 +140,20 @@ class TradeGUI(DirectFrame):
             command=command
         )
 
-    def _makeValueLabel(self, z):
+    def _makeValueLabel(self, x, z=None, wordwrap=18):
+        if z is None:
+            z = x
+            x = 0
         return DirectLabel(
             parent=self,
             relief=None,
             text="",
             text_scale=0.035,
             text_fg=TEXT,
-            text_wordwrap=18,
+            text_wordwrap=wordwrap,
             text_align=TextNode.ACenter,
             textMayChange=1,
-            pos=(0, 0, z - 0.046)
+            pos=(x, 0, z - 0.046)
         )
 
     def _makeCycleRow(self, label, z, previousCommand, nextCommand):
@@ -160,8 +169,66 @@ class TradeGUI(DirectFrame):
         self._makeButton("<", (-0.35, 0, z - 0.03), previousCommand)
         self._makeButton(">", (0.35, 0, z - 0.03), nextCommand)
 
+    def _makeItemPicker(self, label, z, isOffer):
+        DirectLabel(
+            parent=self,
+            relief=None,
+            text=label,
+            text_scale=0.031,
+            text_fg=MUTED_TEXT,
+            text_align=TextNode.ALeft,
+            pos=(-0.38, 0, z + 0.13)
+        )
+        scroller = DirectScrolledList(
+            parent=self.controlBackground,
+            relief=DGG.FLAT,
+            frameColor=(0.02, 0.025, 0.035, 0.88),
+            frameSize=(-0.385, 0.385, -0.115, 0.115),
+            pos=(0, 0, z),
+            numItemsVisible=3,
+            forceHeight=0.064,
+            itemFrame_frameSize=(-0.33, 0.33, -0.095, 0.095),
+            decButton_text="^",
+            decButton_text_scale=0.04,
+            decButton_text_pos=(0, -0.012),
+            decButton_frameColor=(BUTTON_BG, BUTTON_HOVER, BUTTON_HOVER, BUTTON_DISABLED),
+            decButton_frameSize=(-0.045, 0.045, -0.026, 0.026),
+            decButton_pos=(0.41, 0, 0.065),
+            incButton_text="v",
+            incButton_text_scale=0.04,
+            incButton_text_pos=(0, -0.012),
+            incButton_frameColor=(BUTTON_BG, BUTTON_HOVER, BUTTON_HOVER, BUTTON_DISABLED),
+            incButton_frameSize=(-0.045, 0.045, -0.026, 0.026),
+            incButton_pos=(0.41, 0, -0.065),
+        )
+        if isOffer:
+            self.offerScroller = scroller
+        else:
+            self.requestScroller = scroller
+
+    def _makeListButton(self, label, selected, locked, command, index):
+        prefix = "> " if selected else ""
+        suffix = " (recovering)" if locked else ""
+        color = ACCENT if selected else TEXT
+        state = DGG.DISABLED if locked else DGG.NORMAL
+        return DirectButton(
+            relief=DGG.FLAT,
+            frameColor=(BUTTON_BG, BUTTON_HOVER, BUTTON_HOVER, BUTTON_DISABLED),
+            frameSize=(-0.315, 0.315, -0.026, 0.026),
+            text=f"{prefix}{label}{suffix}",
+            text_fg=color,
+            text_scale=0.026,
+            text_wordwrap=24,
+            text_align=TextNode.ALeft,
+            text_pos=(0, -0.008),
+            command=command,
+            extraArgs=[index],
+            state=state
+        )
+
     def toggleVisibility(self):
         if self.isHidden():
+            self.raidMode = False
             self.refresh()
             self.show()
         else:
@@ -178,16 +245,25 @@ class TradeGUI(DirectFrame):
         self.requestItems = self._getTargetOwnedItems()
 
         debtItemIds = set(debt[1] for debt in base.localAvatar.getAPTradeDebts())
-        for rewardIndex, itemId in base.localAvatar.getReceivedItems():
+        offerCounts = {}
+        localAvId = base.localAvatar.getDoId()
+        if manager is not None and manager.hasTradeInventory(localAvId):
+            offerSource = manager.getTradeInventory(localAvId)
+        else:
+            offerSource = base.localAvatar.getReceivedItems()
+        for rewardIndex, itemId in offerSource:
             itemDef = get_item_def_from_id(itemId)
             if itemDef is None:
                 continue
             locked = itemId in debtItemIds
-            self.offerItems.append((rewardIndex, itemId, itemDef.name.value, locked))
+            offerCounts[itemId] = offerCounts.get(itemId, 0) + 1
+            suffix = f" #{offerCounts[itemId]}" if offerCounts[itemId] > 1 else ""
+            self.offerItems.append((rewardIndex, itemId, f"{itemDef.name.value}{suffix}", locked))
 
         self.offerIndex = self._clampIndex(self.offerIndex, self.offerItems)
         self.requestIndex = self._clampIndex(self.requestIndex, self.requestItems)
         self._refreshLabels()
+        self._refreshListItems()
 
     def _getTargetOwnedItems(self):
         if not self.targets or not self.requestItemsReady:
@@ -199,16 +275,15 @@ class TradeGUI(DirectFrame):
             return []
 
         items = []
-        seenItemIds = set()
-        for _rewardIndex, itemId in manager.getTradeInventory(targetAvId):
-            if itemId in seenItemIds:
-                continue
+        itemCounts = {}
+        for rewardIndex, itemId in manager.getTradeInventory(targetAvId):
             itemDef = get_item_def_from_id(itemId)
             if itemDef is None:
                 continue
-            seenItemIds.add(itemId)
-            items.append((itemId, itemDef.name.value))
-        return sorted(items, key=lambda value: value[1])
+            itemCounts[itemId] = itemCounts.get(itemId, 0) + 1
+            suffix = f" #{itemCounts[itemId]}" if itemCounts[itemId] > 1 else ""
+            items.append((rewardIndex, itemId, f"{itemDef.name.value}{suffix}"))
+        return sorted(items, key=lambda value: value[2])
 
     def _targetInventoryIsReady(self):
         if not self.targets:
@@ -219,6 +294,7 @@ class TradeGUI(DirectFrame):
         return manager.hasTradeInventory(self.targets[self.targetIndex])
 
     def openForTarget(self, avId):
+        self.raidMode = False
         self.refresh()
         if avId in self.targets:
             self.targetIndex = self.targets.index(avId)
@@ -226,6 +302,15 @@ class TradeGUI(DirectFrame):
             self.requestItems = self._getTargetOwnedItems()
             self.requestIndex = self._clampIndex(self.requestIndex, self.requestItems)
         self._refreshLabels()
+        self._refreshListItems()
+        self.show()
+
+    def openRaid(self):
+        self.raidMode = True
+        self.refresh()
+        self.titleLabel['text'] = "RAID!"
+        self.sendButton['text'] = "Raid"
+        self.statusLabel['text'] = "Choose the forced trade."
         self.show()
 
     def _clampIndex(self, index, values):
@@ -234,6 +319,8 @@ class TradeGUI(DirectFrame):
         return max(0, min(index, len(values) - 1))
 
     def _refreshLabels(self):
+        self.titleLabel['text'] = "RAID!" if self.raidMode else "Trade"
+        self.sendButton['text'] = "Raid" if self.raidMode else "Send"
         self.targetValue['text'] = self._getTargetLabel()
         self.offerValue['text'] = self._getOfferLabel()
         self.requestValue['text'] = self._getRequestLabel()
@@ -255,8 +342,29 @@ class TradeGUI(DirectFrame):
             self.statusLabel['text'] = "Recover this item before trading it again."
             self.sendButton['state'] = DGG.DISABLED
         else:
-            self.statusLabel['text'] = ""
+            self.statusLabel['text'] = "Choose the forced trade." if self.raidMode else ""
             self.sendButton['state'] = DGG.NORMAL
+
+    def _refreshListItems(self):
+        self._replaceScrollerItems(self.offerScroller, self.offerButtons, self.offerItems, self.offerIndex, self.selectOffer, True)
+        self._replaceScrollerItems(self.requestScroller, self.requestButtons, self.requestItems, self.requestIndex, self.selectRequest, False)
+
+    def _replaceScrollerItems(self, scroller, oldButtons, items, selectedIndex, command, hasLockedColumn):
+        for button in oldButtons:
+            scroller.removeItem(button)
+            button.destroy()
+        del oldButtons[:]
+        if not items:
+            placeholder = self._makeListButton("None", True, True, lambda _index: None, 0)
+            oldButtons.append(placeholder)
+            scroller.addItem(placeholder)
+            return
+        for index, item in enumerate(items):
+            label = item[2]
+            locked = hasLockedColumn and item[3]
+            button = self._makeListButton(label, index == selectedIndex, locked, command, index)
+            oldButtons.append(button)
+            scroller.addItem(button)
 
     def _getTargetLabel(self):
         if not self.targets:
@@ -278,7 +386,7 @@ class TradeGUI(DirectFrame):
     def _getRequestLabel(self):
         if not self.requestItems:
             return "No items"
-        return self.requestItems[self.requestIndex][1]
+        return self.requestItems[self.requestIndex][2]
 
     def _getDebtLabel(self):
         debts = base.localAvatar.getAPTradeDebts()
@@ -306,6 +414,7 @@ class TradeGUI(DirectFrame):
         else:
             setattr(self, attr, (getattr(self, attr) + delta) % len(values))
         self._refreshLabels()
+        self._refreshListItems()
 
     def _cycleTarget(self, delta):
         if not self.targets:
@@ -316,6 +425,7 @@ class TradeGUI(DirectFrame):
         self.requestItems = self._getTargetOwnedItems()
         self.requestIndex = self._clampIndex(self.requestIndex, self.requestItems)
         self._refreshLabels()
+        self._refreshListItems()
 
     def previousTarget(self):
         self._cycleTarget(-1)
@@ -335,6 +445,16 @@ class TradeGUI(DirectFrame):
     def nextRequest(self):
         self._cycle('requestIndex', self.requestItems, 1)
 
+    def selectOffer(self, index):
+        self.offerIndex = self._clampIndex(index, self.offerItems)
+        self._refreshLabels()
+        self._refreshListItems()
+
+    def selectRequest(self, index):
+        self.requestIndex = self._clampIndex(index, self.requestItems)
+        self._refreshLabels()
+        self._refreshListItems()
+
     def sendTrade(self):
         self.refresh()
         if not self.targets or not self.offerItems or not self.requestItems:
@@ -344,9 +464,14 @@ class TradeGUI(DirectFrame):
 
         targetAvId = self.targets[self.targetIndex]
         rewardIndex, offerItemId, _offerName, _locked = self.offerItems[self.offerIndex]
-        requestedItemId, _requestedName = self.requestItems[self.requestIndex]
-        base.cr.archipelagoManager.d_requestTrade(targetAvId, rewardIndex, offerItemId, requestedItemId)
-        self.statusLabel['text'] = "Trade sent."
+        requestedIndex, requestedItemId, _requestedName = self.requestItems[self.requestIndex]
+        if self.raidMode:
+            base.cr.archipelagoManager.d_requestRaidTrade(targetAvId, rewardIndex, offerItemId, requestedIndex, requestedItemId)
+            self.raidMode = False
+            self.statusLabel['text'] = "RAID sent."
+        else:
+            base.cr.archipelagoManager.d_requestTrade(targetAvId, rewardIndex, offerItemId, requestedIndex, requestedItemId)
+            self.statusLabel['text'] = "Trade sent."
 
     def destroy(self):
         if hasattr(self, 'toggleButton'):

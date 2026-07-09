@@ -15,7 +15,9 @@ ITEM_ID_TO_LABEL = {
     if isinstance(get_ap_reward_from_id(item_id), TrapReward)
 }
 
-ROW_HEIGHT = 0.13
+COLUMNS = 3
+ROW_HEIGHT = 0.12
+COLUMN_WIDTH = 0.31
 PANEL_POS = (0.92, 0.0, 0.6)
 TOGGLE_POS = (1.15, 0.0, 0.9)
 
@@ -110,8 +112,22 @@ class TrapsGUI(DirectFrame):
 
         self.emptyLabel.hide()
 
-        for row, (index, itemId) in enumerate(heldTraps):
+        groupedTraps = []
+        trapsByItem = {}
+        for index, itemId in heldTraps:
+            trapsByItem.setdefault(itemId, []).append(index)
+        for itemId, indexes in trapsByItem.items():
+            groupedTraps.append((indexes[0], itemId, len(indexes)))
+        groupedTraps.sort(key=lambda trap: ITEM_ID_TO_LABEL.get(trap[1], f"Trap #{trap[1]}"))
+
+        for row, (index, itemId, count) in enumerate(groupedTraps):
             label = ITEM_ID_TO_LABEL.get(itemId, f"Trap #{itemId}")
+            if count > 1:
+                label = f"{label} x{count}"
+            gridRow = row // COLUMNS
+            gridColumn = row % COLUMNS
+            x = (gridColumn - 1) * COLUMN_WIDTH
+            z = 0.12 - gridRow * ROW_HEIGHT
 
             btn = DirectButton(
                 parent=self,
@@ -121,11 +137,12 @@ class TrapsGUI(DirectFrame):
                     self.guiButton.find('**/QuitBtn_DN'),
                     self.guiButton.find('**/QuitBtn_RLVR')
                 ),
-                image_scale=(1.0, 1, 1),
+                image_scale=(0.72, 1, 0.85),
                 text=f"{label}",
-                text_scale=0.04,
+                text_scale=0.027,
+                text_wordwrap=8,
                 text_pos=(0, -0.01),
-                pos=(0, 0.0, 0.1 - (row + 1) * ROW_HEIGHT),
+                pos=(x, 0.0, z),
                 command=self.fireTrap,
                 extraArgs=[index]
             )

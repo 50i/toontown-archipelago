@@ -1,3 +1,4 @@
+import random
 from typing import Union, List
 
 from direct.directnotify import DirectNotifyGlobal
@@ -9,7 +10,8 @@ from toontown.archipelago.definitions.rewards import EarnedAPReward, get_ap_rewa
 from toontown.archipelago.util.HintContainer import HintContainer, HintedItem
 from toontown.archipelago.util.archipelago_information import ArchipelagoInformation
 from toontown.toon.DistributedToonAI import DistributedToonAI
-from apworld.toontown import get_item_def_from_id
+from toontown.coghq.CogDisguiseGlobals import PartsPerSuitBitmasks
+from apworld.toontown import ITEM_NAME_TO_ID, ToontownItemName, get_item_def_from_id
 
 
 class DistributedArchipelagoManagerAI(DistributedObjectAI):
@@ -22,6 +24,8 @@ class DistributedArchipelagoManagerAI(DistributedObjectAI):
         # A cache of the last astron update sent, no need to use
         self.__previousSyncedInformation = []
         self.__pendingTrades = {}
+        self.__raidTrapLocation = None
+        self.__raidTrapClaimedBy = 0
 
     def announceGenerate(self):
         self.notify.debug(f"DistributedArchipelagoManager announceGenerate() with doId: {self.doId}")
@@ -169,10 +173,38 @@ class DistributedArchipelagoManagerAI(DistributedObjectAI):
         for receivedIndex, receivedItemId in toon.getReceivedItems():
             if receivedIndex == rewardIndex and receivedItemId == itemId:
                 return True
-        return False
+        return (rewardIndex, itemId) in self.__getVirtualCogDisguiseItems(toon)
 
-    def __findReceivedItemIndex(self, toon, itemId):
+    def __getVirtualCogDisguiseItems(self, toon):
+        deptToItem = {
+            0: ToontownItemName.BOSSBOT_DISGUISE.value,
+            1: ToontownItemName.LAWBOT_DISGUISE.value,
+            2: ToontownItemName.CASHBOT_DISGUISE.value,
+            3: ToontownItemName.SELLBOT_DISGUISE.value,
+        }
+        receivedItemIds = {itemId for _index, itemId in toon.getReceivedItems()}
+        virtualItems = []
+        for dept, itemName in deptToItem.items():
+            itemId = ITEM_NAME_TO_ID[itemName]
+            if itemId in receivedItemIds:
+                continue
+            try:
+                if toon.getCogParts()[dept] != PartsPerSuitBitmasks[dept]:
+                    continue
+            except Exception:
+                continue
+            virtualItems.append((930000000000 + (toon.doId * 10) + dept, itemId))
+        return virtualItems
+
+    def __findReceivedItemIndex(self, toon, itemId, requestedIndex=None):
         for receivedIndex, receivedItemId in toon.getReceivedItems():
+            if requestedIndex is not None and receivedIndex != requestedIndex:
+                continue
+            if receivedItemId == itemId:
+                return receivedIndex
+        for receivedIndex, receivedItemId in self.__getVirtualCogDisguiseItems(toon):
+            if requestedIndex is not None and receivedIndex != requestedIndex:
+                continue
             if receivedItemId == itemId:
                 return receivedIndex
         return None
@@ -180,13 +212,17 @@ class DistributedArchipelagoManagerAI(DistributedObjectAI):
     def __getTradeInventoryStruct(self, toon):
         debtItemIds = {debt[1] for debt in toon.getAPTradeDebts()}
         items = []
-        seenItemIds = set()
         for receivedIndex, itemId in toon.getReceivedItems():
-            if itemId in seenItemIds or itemId in debtItemIds:
+            if itemId in debtItemIds:
                 continue
             if self.__getItemName(itemId) is None:
                 continue
-            seenItemIds.add(itemId)
+            items.append((receivedIndex, itemId))
+        for receivedIndex, itemId in self.__getVirtualCogDisguiseItems(toon):
+            if itemId in debtItemIds:
+                continue
+            if self.__getItemName(itemId) is None:
+                continue
             items.append((receivedIndex, itemId))
         return [toon.doId, items]
 
@@ -210,7 +246,46 @@ class DistributedArchipelagoManagerAI(DistributedObjectAI):
         receiver.queueAPReward(EarnedAPReward(receiver, rewardDefinition, tradeIndex, itemId, sender.getName(), False))
         receiver.addReceivedItem(tradeIndex, itemId)
 
-    def requestTrade(self, targetAvId, offerIndex, offerItemId, requestedItemId):
+    def __chooseRaidTrapLocation(self):
+        if self.__raidTrapLocation is not None:
+            return self.__raidTrapLocation
+
+        candidateIds = []
+        seedName = "raid-trap"
+        for session in self.__getAllArchipelagoSessions():
+            slotData = getattr(session.avatar, 'slotData', {}) or {}
+            seedName = slotData.get('seed_name', seedName)
+            for location in slotData.get('local_locations', []):
+                try:
+                    candidateIds.append(int(location[0]))
+                except (TypeError, ValueError, IndexError):
+                    continue
+            if candidateIds:
+                break
+
+        if not candidateIds:
+            return None
+
+        candidateIds = sorted(set(candidateIds))
+        self.__raidTrapLocation = random.Random(f"raid-trap:{seedName}").choice(candidateIds)
+        self.notify.warning(f"[AP RAID] RAID! trap location selected: {self.__raidTrapLocation}")
+        return self.__raidTrapLocation
+
+    def maybeGrantRaidTrap(self, toon, checkedLocations):
+        if self.__raidTrapClaimedBy:
+            return
+        location = self.__chooseRaidTrapLocation()
+        if location is None or location not in set(checkedLocations):
+            return
+        itemId = ITEM_NAME_TO_ID[ToontownItemName.RAID_TRAP.value]
+        rewardIndex = 940000000000 + location
+        rewardDefinition = get_ap_reward_from_id(itemId)
+        toon.queueAPReward(EarnedAPReward(toon, rewardDefinition, rewardIndex, itemId, "RAID!", True))
+        self.__raidTrapClaimedBy = toon.doId
+        self.notify.warning(f"[AP RAID] {toon.getName()} claimed RAID! at location {location}")
+        toon.d_sendArchipelagoMessage("RAID! trap found.")
+
+    def requestTrade(self, targetAvId, offerIndex, offerItemId, requestedIndex, requestedItemId):
         requesterAvId = self.air.getAvatarIdFromSender()
         requester = self.__getToon(requesterAvId)
         target = self.__getToon(targetAvId)
@@ -236,13 +311,21 @@ class DistributedArchipelagoManagerAI(DistributedObjectAI):
             self.__sendTradeResult(requesterAvId, "That trade contains an unknown AP item.")
             return
 
-        self.__pendingTrades[targetAvId] = (requesterAvId, offerIndex, offerItemId, requestedItemId)
+        self.__pendingTrades[targetAvId] = (requesterAvId, offerIndex, offerItemId, requestedIndex, requestedItemId)
         self.sendUpdateToAvatarId(
             targetAvId,
             'tradeRequest',
             [requesterAvId, requester.getName(), offerIndex, offerItemId, requestedItemId, offerName, requestedName]
         )
         self.__sendTradeResult(requesterAvId, f"Trade offered to {target.getName()}.")
+
+    def requestRaidTrade(self, targetAvId, offerIndex, offerItemId, requestedIndex, requestedItemId):
+        requesterAvId = self.air.getAvatarIdFromSender()
+        requester = self.__getToon(requesterAvId)
+        if requester is None or not requester.consumeRaidTradeAuthorization():
+            self.__sendTradeResult(requesterAvId, "RAID! is not active.")
+            return
+        self.__executeAcceptedTrade(requesterAvId, targetAvId, offerIndex, offerItemId, requestedIndex, requestedItemId, forced=True)
 
     def respondTrade(self, requesterAvId, accepted):
         targetAvId = self.air.getAvatarIdFromSender()
@@ -258,13 +341,28 @@ class DistributedArchipelagoManagerAI(DistributedObjectAI):
             self.__sendTradeResult(targetAvId, "The other toon is no longer available.")
             return
 
-        requesterAvId, offerIndex, offerItemId, requestedItemId = pendingTrade
-        offerName = self.__getItemName(offerItemId)
-        requestedName = self.__getItemName(requestedItemId)
+        requesterAvId, offerIndex, offerItemId, requestedIndex, requestedItemId = pendingTrade
         if not accepted:
-            self.__sendTradeResult(requesterAvId, f"{target.getName()} declined your trade.")
+            target = self.__getToon(targetAvId)
+            requester = self.__getToon(requesterAvId)
+            if requester is not None:
+                self.__sendTradeResult(requesterAvId, f"{target.getName()} declined your trade.")
             self.__sendTradeResult(targetAvId, "Trade declined.")
             return
+
+        self.__executeAcceptedTrade(requesterAvId, targetAvId, offerIndex, offerItemId, requestedIndex, requestedItemId)
+
+    def __executeAcceptedTrade(self, requesterAvId, targetAvId, offerIndex, offerItemId, requestedIndex, requestedItemId, forced=False):
+        requester = self.__getToon(requesterAvId)
+        target = self.__getToon(targetAvId)
+        if requester is None or target is None or requesterAvId == targetAvId:
+            self.__sendTradeResult(requesterAvId, "The other toon is no longer available.")
+            if targetAvId:
+                self.__sendTradeResult(targetAvId, "The other toon is no longer available.")
+            return
+
+        offerName = self.__getItemName(offerItemId)
+        requestedName = self.__getItemName(requestedItemId)
 
         if offerName is None or requestedName is None:
             self.__sendTradeResult(requesterAvId, "Trade cancelled because an item is unknown.")
@@ -276,7 +374,7 @@ class DistributedArchipelagoManagerAI(DistributedObjectAI):
             self.__sendTradeResult(targetAvId, "Trade cancelled because the offered item is gone.")
             return
 
-        requestedIndex = self.__findReceivedItemIndex(target, requestedItemId)
+        requestedIndex = self.__findReceivedItemIndex(target, requestedItemId, requestedIndex)
         if requestedIndex is None:
             self.__sendTradeResult(requesterAvId, f"Trade cancelled because {target.getName()} does not have {requestedName}.")
             self.__sendTradeResult(targetAvId, f"Trade cancelled because you do not have {requestedName}.")
@@ -341,9 +439,9 @@ class DistributedArchipelagoManagerAI(DistributedObjectAI):
 
         self.__sendTradeResult(
             requesterAvId,
-            f"{target.getName()} accepted. You received {requestedName} for {offerName}."
+            f"{'RAID! ' if forced else ''}{target.getName()} {'was raided' if forced else 'accepted'}. You received {requestedName} for {offerName}."
         )
-        self.__sendTradeResult(targetAvId, f"Accepted trade: received {offerName} for {requestedName}.")
+        self.__sendTradeResult(targetAvId, f"{'RAID! ' if forced else 'Accepted trade: '}received {offerName} for {requestedName}.")
 
     """
     Code related to hint management

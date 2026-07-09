@@ -11,6 +11,7 @@ from direct.interval.IntervalGlobal import *
 from direct.showbase.InputStateGlobal import inputState
 from otp.otpbase import OTPGlobals
 from toontown.toonbase import ToontownGlobals
+from toontown.toonbase import ToontownBattleGlobals
 from direct.directnotify import DirectNotifyGlobal
 from otp.avatar import DistributedPlayer
 from otp.avatar import Avatar, DistributedAvatar
@@ -216,6 +217,9 @@ class DistributedToon(DistributedPlayer.DistributedPlayer, Toon.Toon, Distribute
         self.baseGagSkillMultiplier = 1
         self.damageMultiplier = 100
         self.overflowMod = 100
+        self.trapStrengthPercent = 0
+        self.disabledGagTrack = 255
+        self.disabledGagTrackUntil = 0
         self.accessKeys: List[int] = []
         self.receivedItems: List[Tuple[int, int]] = []
         self.receivedItemIDs: set[int] = set()
@@ -1393,10 +1397,14 @@ class DistributedToon(DistributedPlayer.DistributedPlayer, Toon.Toon, Distribute
         return self.trackArray
 
     def hasTrackAccess(self, track):
+        if self.isGagTrackDisabled(track):
+            return 0
         return self.trackArray[track]
 
     # What level gags are we allowed to learn for this track
     def getTrackAccessLevel(self, track):
+        if self.isGagTrackDisabled(track):
+            return 0
         if not self.trackArray:
             return 0
 
@@ -1422,6 +1430,7 @@ class DistributedToon(DistributedPlayer.DistributedPlayer, Toon.Toon, Distribute
 
     def setTeleportAccess(self, teleportZoneArray):
         self.teleportZoneArray = teleportZoneArray
+        messenger.send('archipelago-items-updated')
 
     def getTeleportAccess(self):
         return self.teleportZoneArray
@@ -2907,6 +2916,12 @@ class DistributedToon(DistributedPlayer.DistributedPlayer, Toon.Toon, Distribute
     def setOverflowMod(self, newOverflow) -> None:
         self.overflowMod = newOverflow
 
+    def getTrapStrengthPercent(self) -> int:
+        return getattr(self, 'trapStrengthPercent', 0)
+
+    def setTrapStrengthPercent(self, percent: int) -> None:
+        self.trapStrengthPercent = max(0, int(percent))
+
     # What is this toon's list of access keys acquired
     def getAccessKeys(self) -> List[int]:
         return self.accessKeys
@@ -2914,11 +2929,13 @@ class DistributedToon(DistributedPlayer.DistributedPlayer, Toon.Toon, Distribute
     # Set this toon's list of access keys acquired from the server
     def setAccessKeys(self, keys: List) -> None:
         self.accessKeys = keys
+        messenger.send('archipelago-items-updated')
 
     # Set the AP items this toon has received
     def setReceivedItems(self, receivedItems: List[Tuple[int, int]]):
         self.receivedItems = receivedItems
         self.receivedItemIDs = set(x[1] for x in receivedItems)
+        messenger.send('archipelago-items-updated')
         tradeGui = getattr(self, 'tradeGui', None)
         if tradeGui is not None:
             tradeGui.refresh()
@@ -2935,6 +2952,7 @@ class DistributedToon(DistributedPlayer.DistributedPlayer, Toon.Toon, Distribute
 
     def setAPTradeDebts(self, debts):
         self.apTradeDebts = debts
+        messenger.send('archipelago-items-updated')
         tradeGui = getattr(self, 'tradeGui', None)
         if tradeGui is not None:
             tradeGui.refresh()
@@ -2975,6 +2993,14 @@ class DistributedToon(DistributedPlayer.DistributedPlayer, Toon.Toon, Distribute
             self.fixGui = FixGUI()
         self.fixGui.refresh()
         self.fixGui.show()
+
+    def openRaidTradeGui(self) -> None:
+        if self is not getattr(base, 'localAvatar', None):
+            return
+        if getattr(self, 'tradeGui', None) is None:
+            from toontown.archipelago.gui.TradeGUI import TradeGUI
+            self.tradeGui = TradeGUI()
+        self.tradeGui.openRaid()
 
     def d_requestFixUnlock(self, itemId: int) -> None:
         self.sendUpdate('requestFixUnlock', [int(itemId)])
@@ -3040,6 +3066,64 @@ class DistributedToon(DistributedPlayer.DistributedPlayer, Toon.Toon, Distribute
             label.destroy()
             self.trapReflectTimerLabel = None
 
+    def setDisabledGagTrack(self, track: int) -> None:
+        self.disabledGagTrack = int(track)
+        if self.inventory:
+            self.inventory.updateGUI()
+        if self is getattr(base, 'localAvatar', None):
+            self._refreshGagDisableTimer()
+
+    def setDisabledGagTrackUntil(self, until: int) -> None:
+        self.disabledGagTrackUntil = int(until)
+        if self is getattr(base, 'localAvatar', None):
+            self._refreshGagDisableTimer()
+
+    def getDisabledGagTrack(self) -> int:
+        if getattr(self, 'disabledGagTrackUntil', 0) <= int(time.time()):
+            return 255
+        return getattr(self, 'disabledGagTrack', 255)
+
+    def isGagTrackDisabled(self, track: int) -> bool:
+        return self.getDisabledGagTrack() == track
+
+    def _refreshGagDisableTimer(self) -> None:
+        self._teardownGagDisableTimer()
+        remaining = getattr(self, 'disabledGagTrackUntil', 0) - int(time.time())
+        track = getattr(self, 'disabledGagTrack', 255)
+        if remaining <= 0 or track == 255:
+            return
+
+        from direct.gui.DirectGui import DirectLabel
+        from panda3d.core import TextNode
+        from toontown.toonbase import ToontownTimer
+
+        self.gagDisableTimer = ToontownTimer.ToontownTimer()
+        self.gagDisableTimer.reparentTo(aspect2dp)
+        self.gagDisableTimer.setScale(0.42)
+        self.gagDisableTimer.setPos(0.62, 0, 0.74)
+        self.gagDisableTimer.countdown(remaining, self._teardownGagDisableTimer)
+
+        trackName = ToontownBattleGlobals.Tracks[track].upper()
+        self.gagDisableTimerLabel = DirectLabel(
+            parent=aspect2dp,
+            relief=None,
+            text=f"{trackName} DISABLED!",
+            text_scale=0.05,
+            text_align=TextNode.ACenter,
+            text_fg=(1.0, 0.05, 0.05, 1),
+            pos=(0.62, 0, 0.6)
+        )
+
+    def _teardownGagDisableTimer(self) -> None:
+        timer = getattr(self, 'gagDisableTimer', None)
+        if timer is not None:
+            timer.destroy()
+            self.gagDisableTimer = None
+        label = getattr(self, 'gagDisableTimerLabel', None)
+        if label is not None:
+            label.destroy()
+            self.gagDisableTimerLabel = None
+
     # Lazily builds our standalone held-traps panel. Fully separate from the AP
     # connect GUI above -- its own background/buttons/labels/toggle.
     def _setupTrapsGui(self) -> None:
@@ -3063,6 +3147,7 @@ class DistributedToon(DistributedPlayer.DistributedPlayer, Toon.Toon, Distribute
         if apGui is not None:
             apGui.destroy()
             self.apGui = None
+        self._teardownGagDisableTimer()
 
     def _teardownTrapsGui(self) -> None:
         trapGui = getattr(self, 'trapGui', None)

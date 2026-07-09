@@ -73,8 +73,8 @@ class FishManagerAI:
         threshold = self.newSpeciesPity.get(av.doId, 0)
         return rng < threshold
 
-    def addNewSpeciesPity(self, av):
-        pity = (av.slotData.get('fish_pity', 25) / 100)
+    def addNewSpeciesPity(self, av, pityPercent=None):
+        pity = ((pityPercent if pityPercent is not None else av.slotData.get('fish_pity', 25)) / 100)
 
         # Add the pity
         oldPity = self.newSpeciesPity.get(av.doId, 0)
@@ -136,16 +136,16 @@ class FishManagerAI:
             # Catch the fish
             fishType = av.fishCollection.collectFish(fish)
 
-            self.addNewSpeciesPity(av)
-
             # If we have a new species, reset pity
             if fishType == FishGlobals.COLLECT_NEW_ENTRY:
                 itemType = FishGlobals.FishItemNewEntry
                 self.newSpeciesPity[av.doId] = 0
             elif fishType == FishGlobals.COLLECT_NEW_RECORD:
                 itemType = FishGlobals.FishItemNewRecord
+                self.addNewSpeciesPity(av, 50)
             else:
                 itemType = FishGlobals.FishItem
+                self.addNewSpeciesPity(av)
 
             # Do location checks on this.
             fishLocationName = GENUS_SPECIES_TO_LOCATION[fish.getGenus(), fish.getSpecies()]

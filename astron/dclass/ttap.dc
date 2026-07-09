@@ -1205,6 +1205,10 @@ dclass DistributedToon : DistributedPlayer {
   requestFixUnlock(uint64) ownsend airecv;
   setTrapReflectUntil(uint32 = 0) required ownrecv db;
   setTrapReflectCharges(uint8 = 0) required ownrecv db;
+  setTrapStrengthPercent(uint8 = 0) required ownrecv db;
+  setDisabledGagTrack(uint8 = 255) required ownrecv db;
+  setDisabledGagTrackUntil(uint32 = 0) required ownrecv db;
+  openRaidTradeGui() ownrecv;
   updateLocationScoutsCache(LocationScoutsCache[]) ownrecv;
   resetLocationScoutsCache() ownrecv;
   requestHintPoints() ownsend airecv;
@@ -4018,7 +4022,8 @@ dclass DistributedArchipelagoManager : DistributedObject {
   receiveAPReward(string, string, string);
   requestTradeInventories() clsend airecv;
   tradeInventories(APTradeInventory[]);
-  requestTrade(uint32, uint64, uint64, uint64) clsend airecv;
+  requestTrade(uint32, uint64, uint64, uint64, uint64) clsend airecv;
+  requestRaidTrade(uint32, uint64, uint64, uint64, uint64) clsend airecv;
   respondTrade(uint32, uint8) clsend airecv;
   tradeRequest(uint32, string, uint64, uint64, uint64, string, string);
   tradeResult(string);

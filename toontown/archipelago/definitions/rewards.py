@@ -74,6 +74,12 @@ class TrapReward:
     pass
 
 
+def get_trap_strength_multiplier(firer: "DistributedToonAI" = None) -> float:
+    if firer is None or not hasattr(firer, 'getTrapStrengthPercent'):
+        return 1.0
+    return 1.0 + (max(0, firer.getTrapStrengthPercent()) / 100.0)
+
+
 class LaffBoostReward(APReward):
     def __init__(self, amount: int):
         self.amount = amount
@@ -89,6 +95,13 @@ class LaffBoostReward(APReward):
         av.b_setMaxHp(av.maxHp + self.amount)
         av.toonUp(self.amount)
         av.checkWinCondition()
+
+    def revoke(self, av: "DistributedToonAI", item_id: int = None):
+        newMaxHp = max(15, av.getMaxHp() - self.amount)
+        av.b_setMaxHp(newMaxHp)
+        if av.getHp() > newMaxHp:
+            av.b_setHp(newMaxHp)
+        return True
 
 
 class DmgBoostReward(APReward):
@@ -129,6 +142,15 @@ class GagCapacityReward(APReward):
             av.b_setHas90Capacity(1)
             av.d_considerCapacityRewardMessage90()
 
+    def revoke(self, av: "DistributedToonAI", item_id: int = None):
+        newCarry = max(20, av.maxCarry - self.amount)
+        av.b_setMaxCarry(newCarry)
+        if newCarry < 75 and av.has75:
+            av.b_setHas75Capacity(0)
+        if newCarry < 90 and av.has90:
+            av.b_setHas90Capacity(0)
+        return True
+
 
 class JellybeanJarUpgradeReward(APReward):
 
@@ -146,6 +168,12 @@ class JellybeanJarUpgradeReward(APReward):
         av.b_setMaxMoney(av.maxMoney + self.amount)
         av.addMoney(self.amount)
 
+    def revoke(self, av: "DistributedToonAI", item_id: int = None):
+        newMax = max(1000, av.maxMoney - self.amount)
+        av.b_setMaxMoney(newMax)
+        av.b_setMoney(min(av.getMoney(), newMax))
+        return True
+
 class TaskCapacityReward(APReward):
     
         def __init__(self, amount: int):
@@ -160,6 +188,10 @@ class TaskCapacityReward(APReward):
     
         def apply(self, av: "DistributedToonAI", firer: "DistributedToonAI" = None):
             av.b_setQuestCarryLimit(av.getQuestCarryLimit() + self.amount)
+
+        def revoke(self, av: "DistributedToonAI", item_id: int = None):
+            av.b_setQuestCarryLimit(max(1, av.getQuestCarryLimit() - self.amount))
+            return True
 
 class GagTrainingFrameReward(APReward):
     TOONUP = 0
@@ -267,6 +299,17 @@ class GagTrainingFrameReward(APReward):
             av.inventory.addItemsWithListMax([(self.track, newLevel-1)])  # Give the new gags!!
             av.b_setInventory(av.inventory.makeNetString())
 
+    def revoke(self, av: "DistributedToonAI", item_id: int = None):
+        oldLevel = av.getTrackAccessLevel(self.track)
+        if oldLevel <= 0:
+            return False
+        av.setTrackAccessLevel(self.track, max(1, oldLevel - 1))
+        cap = av.experience.getExperienceCapForTrack(self.track)
+        if av.experience.getExp(self.track) > cap:
+            av.experience.setExp(self.track, cap)
+            av.ap_setExperience(av.experience.getCurrentExperience())
+        return True
+
 class GagUpgradeReward(APReward):
     TOONUP = 0
     TRAP = 1
@@ -341,6 +384,14 @@ class GagUpgradeReward(APReward):
         bonusArray[self.track] = 7
         av.b_setTrackBonusLevel(bonusArray)
 
+    def revoke(self, av: "DistributedToonAI", item_id: int = None):
+        bonusArray = av.getTrackBonusLevel()
+        if self.track >= len(bonusArray) or bonusArray[self.track] < 0:
+            return False
+        bonusArray[self.track] = -1
+        av.b_setTrackBonusLevel(bonusArray)
+        return True
+
 
 class GagTrainingMultiplierReward(APReward):
 
@@ -359,6 +410,10 @@ class GagTrainingMultiplierReward(APReward):
         oldMultiplier = av.getBaseGagSkillMultiplier()
         newMultiplier = oldMultiplier + self.amount
         av.b_setBaseGagSkillMultiplier(newMultiplier)
+
+    def revoke(self, av: "DistributedToonAI", item_id: int = None):
+        av.b_setBaseGagSkillMultiplier(max(1, av.getBaseGagSkillMultiplier() - self.amount))
+        return True
 
 
 class GolfPutterReward(APReward):
@@ -443,6 +498,10 @@ class FishingRodUpgradeReward(APReward):
         nextRodID = min(av.fishingRod + 1, FishGlobals.MaxRodId)
 
         av.b_setFishingRod(nextRodID)
+
+    def revoke(self, av: "DistributedToonAI", item_id: int = None):
+        av.b_setFishingRod(max(0, av.getFishingRod() - 1))
+        return True
 
 
 class AccessKeyReward(APReward):
@@ -653,6 +712,12 @@ class CogDisguiseReward(APReward):
         parts[self.dept] = PartsPerSuitBitmasks[self.dept]
         av.b_setCogParts(parts)
 
+    def revoke(self, av: "DistributedToonAI", item_id: int = None):
+        parts = av.getCogParts()
+        parts[self.dept] = 0
+        av.b_setCogParts(parts)
+        return True
+
 
 class JellybeanReward(APReward):
 
@@ -669,6 +734,10 @@ class JellybeanReward(APReward):
     def apply(self, av: "DistributedToonAI", firer: "DistributedToonAI" = None):
         av.addMoney(self.amount)
 
+    def revoke(self, av: "DistributedToonAI", item_id: int = None):
+        av.takeMoney(min(self.amount, av.getMoney()))
+        return True
+
 
 class FishReward(APReward):
     def __init__(self, amount: int):
@@ -676,8 +745,8 @@ class FishReward(APReward):
 
     def formatted_header(self) -> str:
         return global_text_properties.get_raw_formatted_string([
-            MinimalJsonMessagePart("You know what that means...\n"),
-            MinimalJsonMessagePart("Fish", color='cyan'),
+            MinimalJsonMessagePart("You found an\n"),
+            MinimalJsonMessagePart("Old Boot", color='cyan'),
             MinimalJsonMessagePart("!"),
         ])
 
@@ -700,20 +769,13 @@ class DamageTrapAward(APReward, TrapReward):
         ])
 
     def apply(self, av: "DistributedToonAI", firer: "DistributedToonAI" = None):
-        amountPercent = self.amount/100
+        amountPercent = (self.amount * get_trap_strength_multiplier(firer)) / 100
         # Deal at least 1 damage
         damage = max(1, math.floor(amountPercent * av.getMaxHp()))
-        kill_threshold = math.floor(av.getMaxHp() * 0.1)
         if damage >= av.getHp():
-            # Means we won't kill the player unless we're under 10% hp
-            if av.getHp() <= kill_threshold:
-                damage = av.getHp()
-            # Leave the player at 1 since we were at over 10%
-            else:
-                damage = max(1, (av.getHp() - 1))
+            damage = av.getHp()
         if av.getHp() > 0:
-            # If we're under threshold, we die
-            if av.getHp() <= kill_threshold:
+            if damage >= av.getHp():
                 av.setDeathReason(DeathReason.DAMAGE_TRAP)
             av.takeDamage(damage)
         av.playSound('phase_4/audio/sfx/oof.ogg')
@@ -730,9 +792,12 @@ class UberTrapAward(APReward, TrapReward):
         ])
 
     def apply(self, av: "DistributedToonAI", firer: "DistributedToonAI" = None):
-        newHp = 15 if av.getHp() > 15 else 1
+        threshold = max(1, math.floor(15 * get_trap_strength_multiplier(firer)))
+        newHp = threshold if av.getHp() > threshold else 0
         damage = av.getHp() - newHp
         if av.getHp() > 0:
+            if damage >= av.getHp():
+                av.setDeathReason(DeathReason.DAMAGE_TRAP)
             av.takeDamage(damage)
         av.inventory.maxInventory(clearFirst=True, restockAmount=20)
         av.b_setInventory(av.inventory.makeNetString())
@@ -768,12 +833,6 @@ class ExposeTrapAward(APReward, TrapReward):
         ])
         firer.d_sendArchipelagoMessage(msg)
 
-        # Let the target know they got exposed, without telling them by whom/where
-        av.d_sendArchipelagoMessage(global_text_properties.get_raw_formatted_string([
-            MinimalJsonMessagePart("[Expose] ", color='yellow'),
-            MinimalJsonMessagePart("Your location was just exposed to your opponent!"),
-        ]))
-
     # NOTE: this relies on ZoneUtil/ToontownGlobals conventions (hoodId == playground
     # zoneId, ZoneUtil.getBranchZone identifying the street) that are standard in most
     # Toontown forks but may not exactly match yours -- double check the labels this
@@ -807,15 +866,73 @@ class ExposeTrapAward(APReward, TrapReward):
 
         hoodName = HOOD_NAMES.get(hoodId, "an unknown area")
 
+        COG_FACILITY_ZONES = {
+            ToontownGlobals.SellbotFactoryExt: "at the Sellbot Factory entrance",
+            ToontownGlobals.SellbotFactoryInt: "inside the Front Factory",
+            ToontownGlobals.SellbotFactoryIntS: "inside the Side Factory",
+            ToontownGlobals.CashbotMintIntA: "inside the Coin Mint",
+            ToontownGlobals.CashbotMintIntB: "inside the Dollar Mint",
+            ToontownGlobals.CashbotMintIntC: "inside the Bullion Mint",
+            ToontownGlobals.LawbotOfficeExt: "at the DA Office entrance",
+            ToontownGlobals.LawbotOfficeInt: "inside a DA Office",
+            ToontownGlobals.BossbotCountryClubIntA: "inside the Front Three golf course",
+            ToontownGlobals.BossbotCountryClubIntB: "inside the Middle Six golf course",
+            ToontownGlobals.BossbotCountryClubIntC: "inside the Back Nine golf course",
+        }
+        if zoneId in COG_FACILITY_ZONES:
+            return COG_FACILITY_ZONES[zoneId]
+        if hoodId == ToontownGlobals.GolfZone:
+            return "at the golf course"
         if hoodId in COG_HQ_HOODS and zoneId != hoodId:
-            return f"inside a Cog facility in {hoodName}"
+            return f"inside a Cog HQ facility in {hoodName}"
         if zoneId == hoodId:
             return f"in the {hoodName} playground"
 
         branchZone = ZoneUtil.getBranchZone(zoneId)
         if branchZone == zoneId:
             return f"on a street in {hoodName}"
-        return f"inside a building in {hoodName}"
+
+        buildingType = ExposeTrapAward._describeStreetInterior(av, branchZone, zoneId)
+        return f"inside {buildingType} in {hoodName}"
+
+    @staticmethod
+    def _describeStreetInterior(av: "DistributedToonAI", branchZone: int, zoneId: int) -> str:
+        try:
+            blockNumber = zoneId % 100
+            buildingMgr = av.air.buildingManagers.get(branchZone)
+            if buildingMgr is not None and buildingMgr.isValidBlockNumber(blockNumber):
+                building = buildingMgr.getBuilding(blockNumber)
+                if building.isSuitBuilding():
+                    return "a Cog building"
+                if getattr(building, 'isCogdo', lambda: False)():
+                    return "a Field Office"
+        except Exception:
+            pass
+        return "a toon/NPC building"
+
+
+class ExposeBeansTrapAward(APReward, TrapReward):
+    def formatted_header(self) -> str:
+        return global_text_properties.get_raw_formatted_string([
+            MinimalJsonMessagePart("EXPOSE BEANS TRAP\n", color='yellow'),
+            MinimalJsonMessagePart("Reveals your opponent's jellybeans."),
+        ])
+
+    def apply(self, av: "DistributedToonAI", firer: "DistributedToonAI" = None):
+        if firer is None:
+            return
+        beans = av.getTotalMoney()
+        msg = global_text_properties.get_raw_formatted_string([
+            MinimalJsonMessagePart("[Expose Beans] ", color='yellow'),
+            MinimalJsonMessagePart(f"{av.getName()} has "),
+            MinimalJsonMessagePart(f"{beans}", color='cyan'),
+            MinimalJsonMessagePart(" jellybeans."),
+        ])
+        firer.d_sendArchipelagoMessage(msg)
+        av.d_sendArchipelagoMessage(global_text_properties.get_raw_formatted_string([
+            MinimalJsonMessagePart("[Expose Beans] ", color='yellow'),
+            MinimalJsonMessagePart("Your jellybean count was exposed to your opponent!"),
+        ]))
 
 
 class BeanTaxTrapAward(APReward, TrapReward):
@@ -845,19 +962,18 @@ class BeanTaxTrapAward(APReward, TrapReward):
 
     def apply(self, av: "DistributedToonAI", firer: "DistributedToonAI" = None):
         avMoney = av.getMoney()
+        tax = max(1, math.floor(self.tax * get_trap_strength_multiplier(firer)))
 
-        if self.getPassed(avMoney):
+        if avMoney >= tax:
             av.b_setHasPaidTaxes(True)
-            av.takeMoney(self.tax)
+            av.takeMoney(tax)
             av.playSound('phase_4/audio/sfx/tax_paid.ogg')
             av.d_broadcastHpString("TAXES PAID!", (.35, .7, .35))
             av.d_playEmote(EmoteFuncDict['Happy'], 1)
         else:
             av.b_setHasPaidTaxes(False)
-            if av.getMoney() >= 100:
-                av.takeMoney(self.tax)
-                av.addMoney(100)
-            damage = av.getHp() - 1
+            av.takeMoney(av.getMoney())
+            damage = max(0, av.getHp() - 1)
             if av.getHp() > 0:
                 av.takeDamage(damage)
             av.playSound('phase_4/audio/sfx/tax_evasion.ogg')
@@ -934,6 +1050,43 @@ class GagShuffleAward(APReward, TrapReward):
         av.d_playEmote(EmoteFuncDict['Confused'], 1)
 
 
+class GagDisableTrapAward(APReward, TrapReward):
+    DURATION_SECONDS = 2 * 60
+
+    def formatted_header(self) -> str:
+        return global_text_properties.get_raw_formatted_string([
+            MinimalJsonMessagePart("GAG DISABLE TRAP\n", color='salmon'),
+            MinimalJsonMessagePart("Temporarily disables a random gag track!"),
+        ])
+
+    def apply(self, av: "DistributedToonAI", firer: "DistributedToonAI" = None):
+        availableTracks = [
+            track for track in range(len(ToontownBattleGlobals.Tracks))
+            if av.getTrackAccessLevel(track) > 0
+        ]
+        if not availableTracks:
+            av.d_sendArchipelagoMessage("A gag disable trap fizzled because you have no gag tracks.")
+            return
+        track = random.choice(availableTracks)
+        duration = max(1, math.floor(self.DURATION_SECONDS * get_trap_strength_multiplier(firer)))
+        av.activateGagDisableTrap(track, duration)
+
+
+class RaidTrapAward(APReward, TrapReward):
+    self_target = True
+
+    def formatted_header(self) -> str:
+        return global_text_properties.get_raw_formatted_string([
+            MinimalJsonMessagePart("RAID!\n", color='salmon'),
+            MinimalJsonMessagePart("Force one trade without approval."),
+        ])
+
+    def apply(self, av: "DistributedToonAI", firer: "DistributedToonAI" = None):
+        av.authorizeRaidTrade()
+        av.d_openRaidTradeGui()
+        av.d_sendArchipelagoMessage("RAID! Choose a forced trade.")
+
+
 class TrapReflectAward(APReward, TrapReward):
     DURATION_SECONDS = 3 * 60
     CHARGES = 2
@@ -946,10 +1099,25 @@ class TrapReflectAward(APReward, TrapReward):
         ])
 
     def apply(self, av: "DistributedToonAI", firer: "DistributedToonAI" = None):
-        av.activateTrapReflect(self.DURATION_SECONDS, self.CHARGES)
+        av.activateTrapReflect(math.floor(self.DURATION_SECONDS * get_trap_strength_multiplier(firer)), self.CHARGES)
         av.playSound('phase_4/audio/sfx/SZ_DD_treasure.ogg')
         av.d_broadcastHpString("TRAP REFLECT!", (.95, .85, .2))
         av.d_playEmote(EmoteFuncDict['Resistance Salute'], 1)
+
+
+class TrapStrengthReward(APReward):
+    def __init__(self, percent: int):
+        self.percent = percent
+
+    def formatted_header(self) -> str:
+        return global_text_properties.get_raw_formatted_string([
+            MinimalJsonMessagePart("Trap Strength\n", color='yellow'),
+            MinimalJsonMessagePart(f"+{self.percent}% stronger", color='cyan'),
+            MinimalJsonMessagePart(" forever!"),
+        ])
+
+    def apply(self, av: "DistributedToonAI", firer: "DistributedToonAI" = None):
+        av.b_setTrapStrengthPercent(self.percent)
 
 
 class GagExpBundleAward(APReward):
@@ -972,6 +1140,15 @@ class GagExpBundleAward(APReward):
         av.ap_setExperience(av.experience.getCurrentExperience())
         # now check for win condition since we have one for maxed gags
         av.checkWinCondition()
+
+    def revoke(self, av: "DistributedToonAI", item_id: int = None):
+        for index, _ in enumerate(ToontownBattleGlobals.Tracks):
+            currentCap = min(av.experience.getExperienceCapForTrack(index), ToontownBattleGlobals.regMaxSkill)
+            expToRemove = math.ceil(currentCap * (self.amount / 100))
+            currentExp = av.experience.getExp(index)
+            av.experience.setExp(index, max(0, currentExp - expToRemove))
+        av.ap_setExperience(av.experience.getCurrentExperience())
+        return True
 
 
 class HealAward(APReward):
@@ -1055,6 +1232,49 @@ class BossRewardAward(APReward):
             av.addPinkSlips(1)
         elif self.reward == BossRewardAward.SUMMON:
             av.assignNewCogSummons()
+
+    def revoke(self, av: "DistributedToonAI", item_id: int = None):
+        if self.reward == BossRewardAward.SOS:
+            return self._removeSOS(av)
+        if self.reward == BossRewardAward.UNITE:
+            return self._removeUnite(av)
+        if self.reward == BossRewardAward.PINK_SLIP:
+            if av.getPinkSlips() <= 0:
+                return False
+            av.removePinkSlips(1)
+            return True
+        if self.reward == BossRewardAward.SUMMON:
+            return self._removeSummon(av)
+        return False
+
+    def _removeSOS(self, av: "DistributedToonAI"):
+        candidates = NPCToons.npcFriendsWithStars(self.type)
+        for npcId in list(av.getNPCFriendsDict().keys()):
+            if npcId in candidates:
+                return bool(av.attemptSubtractNPCFriend(npcId))
+        return False
+
+    def _removeUnite(self, av: "DistributedToonAI"):
+        if self.type == 1:
+            uniteType = ResistanceChat.RESISTANCE_TOONUP
+        elif self.type == 2:
+            uniteType = ResistanceChat.RESISTANCE_RESTOCK
+        else:
+            uniteType = None
+        for message in list(av.getResistanceMessages()):
+            textId = message[0]
+            decodedType = ResistanceChat.decodeId(textId)[0]
+            if uniteType is None or decodedType == uniteType:
+                av.removeResistanceMessage(textId)
+                return True
+        return False
+
+    def _removeSummon(self, av: "DistributedToonAI"):
+        for suitIndex, summonBits in enumerate(av.getCogSummonsEarned()):
+            for summonType, bit in (('single', 1), ('building', 2), ('invasion', 4)):
+                if summonBits & bit:
+                    return bool(av.removeCogSummonsEarned(suitIndex, summonType))
+        return False
 
 
 class ProofReward(APReward):
@@ -1219,6 +1439,9 @@ ITEM_NAME_TO_AP_REWARD: [str, APReward] = {
     ToontownItemName.DRIP_TRAP.value: DripTrapAward(),
     ToontownItemName.GAG_SHUFFLE_TRAP.value: GagShuffleAward(),
     ToontownItemName.EXPOSE_TRAP.value: ExposeTrapAward(),
+    ToontownItemName.EXPOSE_BEANS_TRAP.value: ExposeBeansTrapAward(),
+    ToontownItemName.GAG_DISABLE_TRAP.value: GagDisableTrapAward(),
+    ToontownItemName.RAID_TRAP.value: RaidTrapAward(),
     ToontownItemName.TRAP_REFLECT.value: TrapReflectAward(),
     ToontownItemName.DAMAGE_15.value: DamageTrapAward(15),
     ToontownItemName.DAMAGE_25.value: DamageTrapAward(25),

@@ -316,15 +316,20 @@ class MapPage(ShtikerPage.ShtikerPage):
                 self.hoodLabel.hide()
         else:
             self.hoodLabel.hide()
+        self.accept('archipelago-items-updated', self._refreshAccessClouds)
+        self._refreshAccessClouds()
+
+    def _refreshAccessClouds(self):
         safeZonesVisited = base.localAvatar.hoodsVisited
         hoodTeleportList = base.localAvatar.getTeleportAccess()
         for hood in self.allZones:
             idx = self.allZones.index(hood)
             label = self.labels[idx]
             clouds = self.clouds[idx]
+            hasTeleportAccess = hood in hoodTeleportList
 
             # Set cloud visibility.
-            if hood in safeZonesVisited:
+            if hood in safeZonesVisited and hasTeleportAccess:
                 label['text_fg'] = (0, 0, 0, 1)
                 for cloud in clouds:
                     cloud.hide()
@@ -336,14 +341,14 @@ class MapPage(ShtikerPage.ShtikerPage):
             # Set label text.
             label.show()
             fullname = base.cr.hoodMgr.getFullnameFromId(hood)
-            if hood in hoodTeleportList:
+            if hasTeleportAccess:
                 text = TTLocalizer.MapPageGoTo % fullname
                 label['text'] = ('', text, text)
             else:
                 label['text'] = ('', fullname, fullname)
 
             # Set cloud opacity.
-            if hood in hoodTeleportList:
+            if hasTeleportAccess:
                 self.cloudAlphas[idx] = 0.5
             else:
                 self.cloudAlphas[idx] = 1.0
@@ -352,6 +357,7 @@ class MapPage(ShtikerPage.ShtikerPage):
                 cloud.setColor(1, 1, 1, cloudAlpha)
 
     def exit(self):
+        self.ignore('archipelago-items-updated')
         ShtikerPage.ShtikerPage.exit(self)
 
     def backToSafeZone(self):

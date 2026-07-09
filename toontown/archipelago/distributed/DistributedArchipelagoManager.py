@@ -282,8 +282,11 @@ class DistributedArchipelagoManager(DistributedObject):
     def hasTradeInventory(self, avId):
         return avId in self._trade_inventory_cache
 
-    def d_requestTrade(self, targetAvId, offerIndex, offerItemId, requestedItemId):
-        self.sendUpdate('requestTrade', [targetAvId, offerIndex, offerItemId, requestedItemId])
+    def d_requestTrade(self, targetAvId, offerIndex, offerItemId, requestedIndex, requestedItemId):
+        self.sendUpdate('requestTrade', [targetAvId, offerIndex, offerItemId, requestedIndex, requestedItemId])
+
+    def d_requestRaidTrade(self, targetAvId, offerIndex, offerItemId, requestedIndex, requestedItemId):
+        self.sendUpdate('requestRaidTrade', [targetAvId, offerIndex, offerItemId, requestedIndex, requestedItemId])
 
     def d_respondTrade(self, requesterAvId, accepted):
         self.sendUpdate('respondTrade', [requesterAvId, 1 if accepted else 0])

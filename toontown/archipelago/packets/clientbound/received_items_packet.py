@@ -34,16 +34,19 @@ class ReceivedItemsPacket(ClientBoundPacketBase):
             if not_applied_yet:
                 itemName = client.get_item_name(item.item, client.get_local_slot())
                 fromName = client.get_slot_info(item.player).name
-                ap_reward_definition: APReward = get_ap_reward_from_id(item.item)
-                reward: EarnedAPReward = EarnedAPReward(client.av, ap_reward_definition, reward_index, item.item, fromName, item.player == client.slot)
-                client.av.queueAPReward(reward)
-                new_items.append((reward_index, item.item))
-                self.debug(f"Queued {itemName} from {fromName}")
+                if client.av.consumeTradedReceivedItem(item.item):
+                    self.debug(f"Replaced traded copy of {itemName} from {fromName} with natural AP receipt")
+                else:
+                    ap_reward_definition: APReward = get_ap_reward_from_id(item.item)
+                    reward: EarnedAPReward = EarnedAPReward(client.av, ap_reward_definition, reward_index, item.item, fromName, item.player == client.slot)
+                    client.av.queueAPReward(reward)
+                    self.debug(f"Queued {itemName} from {fromName}")
 
-                # Relay a cosmetic-only notice to other AP-connected toons on the same game
-                # server so they can see this reward too. This does NOT affect their own
-                # Archipelago session, item state, or progression in any way.
-                client.av.d_broadcastAPRewardToOthers(itemName, fromName)
+                    # Relay a cosmetic-only notice to other AP-connected toons on the same game
+                    # server so they can see this reward too. This does NOT affect their own
+                    # Archipelago session, item state, or progression in any way.
+                    client.av.d_broadcastAPRewardToOthers(itemName, fromName)
+                new_items.append((reward_index, item.item))
 
             # Incrememnt the reward index and go to the next one
             reward_index += 1
