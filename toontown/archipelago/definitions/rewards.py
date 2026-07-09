@@ -61,7 +61,7 @@ class APReward:
     def get_reward_string(self, fromPlayer: str, isSelf=False) -> str:
         return f"{self.formatted_header()}{self._formatted_footer(fromPlayer, isSelf)}"
 
-    def apply(self, av: "DistributedToonAI"):
+    def apply(self, av: "DistributedToonAI", firer: "DistributedToonAI" = None):
         raise NotImplementedError("Please implement the apply() method!")
 
 
@@ -82,7 +82,7 @@ class LaffBoostReward(APReward):
             MinimalJsonMessagePart("!"),
         ])
 
-    def apply(self, av: "DistributedToonAI"):
+    def apply(self, av: "DistributedToonAI", firer: "DistributedToonAI" = None):
         av.b_setMaxHp(av.maxHp + self.amount)
         av.toonUp(self.amount)
         av.checkWinCondition()
@@ -99,7 +99,7 @@ class DmgBoostReward(APReward):
             MinimalJsonMessagePart("!"),
         ])
 
-    def apply(self, av: "DistributedToonAI"):
+    def apply(self, av: "DistributedToonAI", firer: "DistributedToonAI" = None):
         old_dmg = av.getDamageMultiplier()
         av.b_setDamageMultiplier(old_dmg + self.amount)
 
@@ -116,7 +116,7 @@ class GagCapacityReward(APReward):
             MinimalJsonMessagePart("!"),
         ])
 
-    def apply(self, av: "DistributedToonAI"):
+    def apply(self, av: "DistributedToonAI", firer: "DistributedToonAI" = None):
         new_carry = av.maxCarry + self.amount
         av.b_setMaxCarry(new_carry)
         if new_carry >= 75 and av.has75 == 0:
@@ -139,7 +139,7 @@ class JellybeanJarUpgradeReward(APReward):
             MinimalJsonMessagePart("!"),
         ])
 
-    def apply(self, av: "DistributedToonAI"):
+    def apply(self, av: "DistributedToonAI", firer: "DistributedToonAI" = None):
         av.b_setMaxMoney(av.maxMoney + self.amount)
         av.addMoney(self.amount)
 
@@ -155,7 +155,7 @@ class TaskCapacityReward(APReward):
                 MinimalJsonMessagePart("!"),
             ])
     
-        def apply(self, av: "DistributedToonAI"):
+        def apply(self, av: "DistributedToonAI", firer: "DistributedToonAI" = None):
             av.b_setQuestCarryLimit(av.getQuestCarryLimit() + self.amount)
 
 class GagTrainingFrameReward(APReward):
@@ -224,7 +224,7 @@ class GagTrainingFrameReward(APReward):
         ap_icon = self.TRACK_TO_ICON[(self.track)] % str(min(max(level, 1), 7))
         return f'phase_14/maps/gags/{ap_icon}.png'
 
-    def apply(self, av: "DistributedToonAI"):
+    def apply(self, av: "DistributedToonAI", firer: "DistributedToonAI" = None):
         
         # Store option for behavior
         behaviorMode = av.slotData.get("gag_frame_item_behavior", 0)
@@ -333,7 +333,7 @@ class GagUpgradeReward(APReward):
         ap_icon = self.TRACK_TO_ICON[(self.track)] % str(min(level, 7))
         return f'phase_14/maps/gags/{ap_icon}.png'
 
-    def apply(self, av: "DistributedToonAI"):
+    def apply(self, av: "DistributedToonAI", firer: "DistributedToonAI" = None):
         bonusArray = av.getTrackBonusLevel()
         bonusArray[self.track] = 7
         av.b_setTrackBonusLevel(bonusArray)
@@ -352,7 +352,7 @@ class GagTrainingMultiplierReward(APReward):
             MinimalJsonMessagePart("!"),
         ])
 
-    def apply(self, av: "DistributedToonAI"):
+    def apply(self, av: "DistributedToonAI", firer: "DistributedToonAI" = None):
         oldMultiplier = av.getBaseGagSkillMultiplier()
         newMultiplier = oldMultiplier + self.amount
         av.b_setBaseGagSkillMultiplier(newMultiplier)
@@ -367,7 +367,7 @@ class GolfPutterReward(APReward):
             MinimalJsonMessagePart("!"),
         ])
 
-    def apply(self, av: "DistributedToonAI"):
+    def apply(self, av: "DistributedToonAI", firer: "DistributedToonAI" = None):
         av.addAccessKey(ToontownGlobals.PUTTER_KEY)
 
 
@@ -397,7 +397,7 @@ class JokeBookReward(APReward):
             MinimalJsonMessagePart("!"),
         ])
 
-    def apply(self, av: "DistributedToonAI"):
+    def apply(self, av: "DistributedToonAI", firer: "DistributedToonAI" = None):
         if self.playground in list(FADoorCodes.ZONE_TO_JOKE_CODE.keys()):
             key = FADoorCodes.ZONE_TO_JOKE_CODE[self.playground]
             av.addAccessKey(key)
@@ -412,7 +412,7 @@ class GoKartReward(APReward):
             MinimalJsonMessagePart("!"),
         ])
 
-    def apply(self, av: "DistributedToonAI"):
+    def apply(self, av: "DistributedToonAI", firer: "DistributedToonAI" = None):
         av.b_setKartBodyType(1)
         av.b_setTickets(99999)
 
@@ -426,7 +426,7 @@ class FishingRodUpgradeReward(APReward):
             MinimalJsonMessagePart("\nhas been upgraded!"),
         ])
 
-    def apply(self, av: "DistributedToonAI"):
+    def apply(self, av: "DistributedToonAI", firer: "DistributedToonAI" = None):
         nextRodID = min(av.fishingRod + 1, FishGlobals.MaxRodId)
 
         av.b_setFishingRod(nextRodID)
@@ -511,7 +511,7 @@ class AccessKeyReward(APReward):
                 MinimalJsonMessagePart("!"),
             ])
 
-    def apply(self, av: "DistributedToonAI"):
+    def apply(self, av: "DistributedToonAI", firer: "DistributedToonAI" = None):
         # Apply TP before HQ or facilities
         if not av.hasTeleportAccess(self.playground):
             av.addTeleportAccess(self.playground)
@@ -551,7 +551,7 @@ class FishingLicenseReward(APReward):
             MinimalJsonMessagePart("!"),
         ])
 
-    def apply(self, av: "DistributedToonAI"):
+    def apply(self, av: "DistributedToonAI", firer: "DistributedToonAI" = None):
         # Get the key ID for this playground
         key = LICENSE_TO_ACCESS_CODE[self.playground]
         av.addAccessKey(key)
@@ -587,7 +587,7 @@ class FacilityAccessReward(APReward):
             MinimalJsonMessagePart(" facility!"),
         ])
 
-    def apply(self, av: "DistributedToonAI"):
+    def apply(self, av: "DistributedToonAI", firer: "DistributedToonAI" = None):
         # Get the key ID for this playground
         av.addAccessKey(self.key)
 
@@ -617,7 +617,7 @@ class CogDisguiseReward(APReward):
             MinimalJsonMessagePart("!"),
         ])
 
-    def apply(self, av: "DistributedToonAI"):
+    def apply(self, av: "DistributedToonAI", firer: "DistributedToonAI" = None):
         parts = av.getCogParts()
         parts[self.dept] = PartsPerSuitBitmasks[self.dept]
         av.b_setCogParts(parts)
@@ -635,7 +635,7 @@ class JellybeanReward(APReward):
             MinimalJsonMessagePart("!"),
         ])
 
-    def apply(self, av: "DistributedToonAI"):
+    def apply(self, av: "DistributedToonAI", firer: "DistributedToonAI" = None):
         av.addMoney(self.amount)
 
 
@@ -650,7 +650,7 @@ class FishReward(APReward):
             MinimalJsonMessagePart("!"),
         ])
 
-    def apply(self, av: "DistributedToonAI"):
+    def apply(self, av: "DistributedToonAI", firer: "DistributedToonAI" = None):
         av.addMoney(self.amount)
         sounds = ["phase_4/audio/sfx/fish.ogg", "phase_4/audio/sfx/ykwtm.ogg"]
         sound = random.choice(sounds)
@@ -668,7 +668,7 @@ class DamageTrapAward(APReward, TrapReward):
             MinimalJsonMessagePart(f"That'll leave a mark!"),
         ])
 
-    def apply(self, av: "DistributedToonAI"):
+    def apply(self, av: "DistributedToonAI", firer: "DistributedToonAI" = None):
         amountPercent = self.amount/100
         # Deal at least 1 damage
         damage = max(1, math.floor(amountPercent * av.getMaxHp()))
@@ -698,7 +698,7 @@ class UberTrapAward(APReward, TrapReward):
             MinimalJsonMessagePart(f"Will you survive?"),
         ])
 
-    def apply(self, av: "DistributedToonAI"):
+    def apply(self, av: "DistributedToonAI", firer: "DistributedToonAI" = None):
         newHp = 15 if av.getHp() > 15 else 1
         damage = av.getHp() - newHp
         if av.getHp() > 0:
@@ -711,6 +711,80 @@ class UberTrapAward(APReward, TrapReward):
             av.playSound('phase_4/audio/sfx/NO_NO_NO.ogg')
         av.d_broadcastHpString("UBERFIED!", (.35, .7, .35))
         av.d_playEmote(EmoteFuncDict['Cry'], 1)
+
+
+class ExposeTrapAward(APReward, TrapReward):
+    """Doesn't damage/debuff the target at all -- just reports their current
+    location (playground / street / interior / cog facility) back to whoever
+    fired it. Requires `firer` to be set, since the message goes to them, not
+    to the target being exposed."""
+
+    def formatted_header(self) -> str:
+        return global_text_properties.get_raw_formatted_string([
+            MinimalJsonMessagePart("EXPOSE TRAP\n", color='yellow'),
+            MinimalJsonMessagePart("Your location has been revealed!"),
+        ])
+
+    def apply(self, av: "DistributedToonAI", firer: "DistributedToonAI" = None):
+        if firer is None:
+            return  # No one to report back to, nothing to do
+
+        location = self._describeLocation(av)
+        msg = global_text_properties.get_raw_formatted_string([
+            MinimalJsonMessagePart("[Expose] ", color='yellow'),
+            MinimalJsonMessagePart(f"{av.getName()} is currently "),
+            MinimalJsonMessagePart(location, color='cyan'),
+        ])
+        firer.d_sendArchipelagoMessage(msg)
+
+        # Let the target know they got exposed, without telling them by whom/where
+        av.d_sendArchipelagoMessage(global_text_properties.get_raw_formatted_string([
+            MinimalJsonMessagePart("[Expose] ", color='yellow'),
+            MinimalJsonMessagePart("Your location was just exposed to your opponent!"),
+        ]))
+
+    # NOTE: this relies on ZoneUtil/ToontownGlobals conventions (hoodId == playground
+    # zoneId, ZoneUtil.getBranchZone identifying the street) that are standard in most
+    # Toontown forks but may not exactly match yours -- double check the labels this
+    # produces in-game and adjust HOOD_NAMES/COG_HQ_HOODS below if anything looks off.
+    @staticmethod
+    def _describeLocation(av: "DistributedToonAI") -> str:
+        from toontown.hood import ZoneUtil
+        from toontown.toonbase import ToontownGlobals
+
+        zoneId = av.zoneId
+        hoodId = ZoneUtil.getHoodId(zoneId)
+
+        HOOD_NAMES = {
+            ToontownGlobals.ToontownCentral: "Toontown Central",
+            ToontownGlobals.DonaldsDock: "Donald's Dock",
+            ToontownGlobals.DaisyGardens: "Daisy Gardens",
+            ToontownGlobals.MinniesMelodyland: "Minnie's Melodyland",
+            ToontownGlobals.TheBrrrgh: "The Brrrgh",
+            ToontownGlobals.DonaldsDreamland: "Donald's Dreamland",
+            ToontownGlobals.SellbotHQ: "the Sellbot HQ",
+            ToontownGlobals.CashbotHQ: "the Cashbot HQ",
+            ToontownGlobals.LawbotHQ: "the Lawbot HQ",
+            ToontownGlobals.BossbotHQ: "the Bossbot HQ",
+        }
+        COG_HQ_HOODS = {
+            ToontownGlobals.SellbotHQ,
+            ToontownGlobals.CashbotHQ,
+            ToontownGlobals.LawbotHQ,
+            ToontownGlobals.BossbotHQ,
+        }
+
+        hoodName = HOOD_NAMES.get(hoodId, "an unknown area")
+
+        if hoodId in COG_HQ_HOODS and zoneId != hoodId:
+            return f"inside a Cog facility in {hoodName}"
+        if zoneId == hoodId:
+            return f"in the {hoodName} playground"
+
+        branchZone = ZoneUtil.getBranchZone(zoneId)
+        if branchZone == zoneId:
+            return f"on a street in {hoodName}"
+        return f"inside a building in {hoodName}"
 
 
 class BeanTaxTrapAward(APReward, TrapReward):
@@ -738,7 +812,7 @@ class BeanTaxTrapAward(APReward, TrapReward):
         else:
             return False
 
-    def apply(self, av: "DistributedToonAI"):
+    def apply(self, av: "DistributedToonAI", firer: "DistributedToonAI" = None):
         avMoney = av.getMoney()
 
         if self.getPassed(avMoney):
@@ -768,7 +842,7 @@ class DripTrapAward(APReward, TrapReward):
             MinimalJsonMessagePart(f"Did someone say the door to drip?"),
         ])
 
-    def apply(self, av: "DistributedToonAI"):
+    def apply(self, av: "DistributedToonAI", firer: "DistributedToonAI" = None):
         av.playSound('phase_4/audio/sfx/avatar_emotion_drip.ogg')
         av.b_setShoes(1, random.randint(1, 48), 0)
         av.b_setBackpack(random.randint(1, 24), 0, 0)
@@ -787,7 +861,7 @@ class GagShuffleAward(APReward, TrapReward):
             MinimalJsonMessagePart(f"Got gags?")
         ])
 
-    def apply(self, av: "DistributedToonAI"):
+    def apply(self, av: "DistributedToonAI", firer: "DistributedToonAI" = None):
         # Let's make sure we aren't already being shuffled
         avId = av.getDoId()
         if av.getBeingShuffled():
@@ -841,7 +915,7 @@ class GagExpBundleAward(APReward):
             MinimalJsonMessagePart(" in each Gag Track!"),
         ])
 
-    def apply(self, av: "DistributedToonAI"):
+    def apply(self, av: "DistributedToonAI", firer: "DistributedToonAI" = None):
         for index, _ in enumerate(ToontownBattleGlobals.Tracks):
             currentCap = min(av.experience.getExperienceCapForTrack(index), ToontownBattleGlobals.regMaxSkill)
             exptoAdd = math.ceil(currentCap * (self.amount/100))
@@ -863,7 +937,7 @@ class HealAward(APReward):
             MinimalJsonMessagePart(" of your Laff!"),
         ])
 
-    def apply(self, av: "DistributedToonAI"):
+    def apply(self, av: "DistributedToonAI", firer: "DistributedToonAI" = None):
         amountPercent = self.amount/100
         heal = math.ceil(amountPercent * av.getMaxHp())
         av.toonUp(heal)
@@ -903,7 +977,7 @@ class BossRewardAward(APReward):
                 MinimalJsonMessagePart("!"),
             ])
 
-    def apply(self, av: "DistributedToonAI"):
+    def apply(self, av: "DistributedToonAI", firer: "DistributedToonAI" = None):
         if self.reward == BossRewardAward.SOS:
             if self.type == 3:
                 print(NPCToons.npcFriendsWithStars(5))
@@ -951,7 +1025,7 @@ class ProofReward(APReward):
             MinimalJsonMessagePart(f"Proof of the {self.numToBoss[self.proof]}'s defeat!"),
         ])
 
-    def apply(self, av: "DistributedToonAI"):
+    def apply(self, av: "DistributedToonAI", firer: "DistributedToonAI" = None):
         # todo keep track of these
         pass
 
@@ -967,7 +1041,7 @@ class BountyReward(APReward):
     def get_image_path(self) -> str:
         return f'phase_14/maps/bounty.png'
 
-    def apply(self, av: "DistributedToonAI"):
+    def apply(self, av: "DistributedToonAI", firer: "DistributedToonAI" = None):
         av.checkWinCondition()
 
 
@@ -979,7 +1053,7 @@ class VictoryReward(APReward):
             MinimalJsonMessagePart(f"You have completed your goal!"),
         ])
 
-    def apply(self, av: "DistributedToonAI"):
+    def apply(self, av: "DistributedToonAI", firer: "DistributedToonAI" = None):
         av.APVictory()
 
 
@@ -988,13 +1062,13 @@ class UndefinedReward(APReward):
     def __init__(self, desc):
         self.desc = desc
 
-    def apply(self, av: "DistributedToonAI"):
+    def apply(self, av: "DistributedToonAI", firer: "DistributedToonAI" = None):
         av.d_setSystemMessage(0, f"Unknown AP reward: {self.desc}")
 
 
 class IgnoreReward(APReward):
 
-    def apply(self, av: "DistributedToonAI"):
+    def apply(self, av: "DistributedToonAI", firer: "DistributedToonAI" = None):
         pass
 
 
@@ -1095,6 +1169,7 @@ ITEM_NAME_TO_AP_REWARD: [str, APReward] = {
     ToontownItemName.BEAN_TAX_TRAP_1250.value: BeanTaxTrapAward(1250),
     ToontownItemName.DRIP_TRAP.value: DripTrapAward(),
     ToontownItemName.GAG_SHUFFLE_TRAP.value: GagShuffleAward(),
+    ToontownItemName.EXPOSE_TRAP.value: ExposeTrapAward(),
     ToontownItemName.DAMAGE_15.value: DamageTrapAward(15),
     ToontownItemName.DAMAGE_25.value: DamageTrapAward(25),
     ToontownItemName.VP.value: ProofReward(0),
@@ -1130,14 +1205,15 @@ def get_ap_reward_from_id(_id: int) -> APReward:
 # - Name of the player who got this reward for us
 class EarnedAPReward:
 
-    def __init__(self, av, reward: APReward, rewardIndex: int, itemId: int, fromName: str, isLocal: bool):
+    def __init__(self, av, reward: APReward, rewardIndex: int, itemId: int, fromName: str, isLocal: bool, firer=None):
         self.av = av
         self.reward = reward
         self.rewardIndex = rewardIndex
         self.itemId = itemId
         self.fromName = fromName
         self.isLocal = isLocal
+        self.firer = firer  # The toon that fired this (only set for manually-fired held traps)
 
     def apply(self):
-        self.reward.apply(self.av)  # Actually give the effects
+        self.reward.apply(self.av, firer=self.firer)  # Actually give the effects
         self.av.d_showReward(self.itemId, self.fromName, self.isLocal)  # Display the popup to the client

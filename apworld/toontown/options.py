@@ -761,6 +761,15 @@ class TrapPercentOption(Range):
     range_end = 100
     default = 20
 
+class ExposeWeightOption(Range):
+    """
+    Weight of expose traps in the trap pool.
+    """
+
+    display_name = "Expose Location Weight"
+    range_start = 0
+    range_end = 100
+    default = 80
 
 class UberWeightOption(Range):
     """
@@ -1000,6 +1009,7 @@ class ToontownOptions(PerGameCommonOptions):
     minigolf_logic: GolfingOption
     seed_generation_type: SeedGenerationTypeOption
     trap_percent: TrapPercentOption
+    expose_weight: ExposeWeightOption
     uber_trap_weight: UberWeightOption
     drip_trap_weight: DripWeightOption
     bean_tax_weight: TaxWeightOption
@@ -1055,6 +1065,6 @@ toontown_option_groups: list[OptionGroup] = [
         BeanWeightOption, GagExpWeightOption, SOSWeightOption, UniteWeightOption, SummonWeightOption, FireWeightOption, HealWeightOption, FishWeightOption
     ], True),
     OptionGroup("Trap Weights", [
-        UberWeightOption, DripWeightOption, TaxWeightOption, ShuffleWeightOption, DamageWeightOption
+        ExposeWeightOption, UberWeightOption, DripWeightOption, TaxWeightOption, ShuffleWeightOption, DamageWeightOption
     ], True)
 ]

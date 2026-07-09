@@ -656,6 +656,7 @@ class ToontownWorld(World):
 
     def get_trap_item_name(self):
         trap_weights = {
+            ToontownItemName.EXPOSE_TRAP.value: self.options.expose_weight,
             ToontownItemName.UBER_TRAP.value: self.options.uber_trap_weight,
             ToontownItemName.DRIP_TRAP.value: self.options.drip_trap_weight,
             ToontownItemName.BEAN_TAX_TRAP_750.value: (self.options.bean_tax_weight/3),
@@ -761,6 +762,7 @@ class ToontownWorld(World):
             "fish_locations": self.options.fish_locations.value,
             "fish_checks": self.options.fish_checks.value,
             "uber_trap_weight": self.options.uber_trap_weight.value,
+            "expose_weight": self.options.expose_weight.value,
             "drip_trap_weight": self.options.drip_trap_weight.value,
             "bean_tax_weight": self.options.bean_tax_weight.value,
             "gag_shuffle_weight": self.options.gag_shuffle_weight.value,

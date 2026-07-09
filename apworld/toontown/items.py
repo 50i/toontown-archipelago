@@ -146,6 +146,7 @@ class ToontownItemName(enum.Enum):
     BEAN_TAX_TRAP_1250 = "1250 Bean Tax"
     DRIP_TRAP = "Drip Trap"
     GAG_SHUFFLE_TRAP = "Gag Shuffle Trap"
+    EXPOSE_TRAP = "Expose Location Trap"
     DAMAGE_15 = "15% Damage Trap"
     DAMAGE_25 = "25% Damage Trap"
 
@@ -296,6 +297,7 @@ ITEM_DEFINITIONS: List[ToontownItemDefinition] = [
     ToontownItemDefinition(ToontownItemName.BEAN_TAX_TRAP_1250,    ItemClassification.trap),
     ToontownItemDefinition(ToontownItemName.DRIP_TRAP,             ItemClassification.trap),
     ToontownItemDefinition(ToontownItemName.GAG_SHUFFLE_TRAP,      ItemClassification.trap),
+    ToontownItemDefinition(ToontownItemName.EXPOSE_TRAP,           ItemClassification.trap),
     ToontownItemDefinition(ToontownItemName.DAMAGE_15,             ItemClassification.trap),
     ToontownItemDefinition(ToontownItemName.DAMAGE_25,             ItemClassification.trap),
     # endregion
@@ -468,6 +470,7 @@ def get_item_groups():
         ToontownItemName.BEAN_TAX_TRAP_1250,
         ToontownItemName.BEAN_TAX_TRAP_750,
         ToontownItemName.GAG_SHUFFLE_TRAP,
+        ToontownItemName.EXPOSE_TRAP,
         ToontownItemName.DAMAGE_15,
         ToontownItemName.DAMAGE_25,
     )

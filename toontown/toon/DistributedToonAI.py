@@ -4850,6 +4850,7 @@ class DistributedToonAI(DistributedPlayerAI.DistributedPlayerAI, DistributedSmoo
         reward.av = target
         reward.fromName = self.getName()
         reward.isLocal = (target.doId == self.doId)
+        reward.firer = self
         reward.apply()
 
     # Finds the other AP-controlled player toon anywhere on the shard.
