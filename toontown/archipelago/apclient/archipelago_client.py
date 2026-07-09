@@ -1,6 +1,7 @@
 import ssl
 import time
 import traceback
+import random
 
 from warnings import warn
 import urllib.parse
@@ -15,18 +16,23 @@ from websockets import ConnectionClosed, InvalidURI, InvalidMessage
 from websockets.sync.client import connect, ClientConnection
 
 from apworld.toontown import locations
+from apworld.toontown.locations import LOCATION_ID_TO_NAME
 from apworld.toontown.options import RewardDisplayOption
+from apworld.toontown.regions import ToontownRegionName
+from toontown.archipelago.definitions.util import ap_location_to_definition
+from toontown.toonbase import ToontownGlobals
 
 from toontown.archipelago.apclient.ap_client_enums import APClientEnums
 from toontown.archipelago.util import net_utils, global_text_properties
 from toontown.archipelago.util.data_package import DataPackage, GlobalDataPackage
 from toontown.archipelago.util.global_text_properties import MinimalJsonMessagePart, get_raw_formatted_string
 from toontown.archipelago.util.location_scouts_cache import LocationScoutsCache
-from toontown.archipelago.util.net_utils import encode, decode, NetworkSlot, item_flag_to_color, item_flag_to_string, NetworkPlayer, item_flag_to_star
+from toontown.archipelago.util.net_utils import encode, decode, NetworkSlot, item_flag_to_color, item_flag_to_string, NetworkItem, NetworkPlayer, item_flag_to_star
 from toontown.archipelago.packets import packet_registry
 from toontown.archipelago.packets.archipelago_packet_base import ArchipelagoPacketBase
 from toontown.archipelago.packets.clientbound.clientbound_packet_base import ClientBoundPacketBase
 from toontown.archipelago.packets.serverbound.connect_packet import ConnectPacket
+from toontown.archipelago.packets.serverbound.location_scouts_packet import LocationScoutsPacket
 from toontown.archipelago.packets.serverbound.serverbound_packet_base import ServerBoundPacketBase
 from toontown.archipelago.util.utils import cache_argsless
 from typing import TYPE_CHECKING
@@ -77,7 +83,11 @@ class ArchipelagoClient(DirectObject):
         self.slot_name_to_slot_alias: Dict[str: str] = {}
         self.global_data_package: GlobalDataPackage = GlobalDataPackage()
         self.location_scouts_cache: LocationScoutsCache = LocationScoutsCache()
+        self.location_scouts_items: Dict[int, NetworkItem] = {}
+        self.pending_free_item_hints = set()
         self.all_locations = []
+        self.missing_locations = []
+        self.checked_locations = []
 
     def has_slot_info(self, slot_id: int) -> bool:
         return slot_id in self.slot_id_to_slot_name
@@ -399,6 +409,122 @@ class ArchipelagoClient(DirectObject):
 
     def clear_cache(self):
         self.location_scouts_cache.clear_cache()
+        self.location_scouts_items.clear()
+        self.pending_free_item_hints.clear()
+
+    def request_free_item_hint(self, item_id: int) -> bool:
+        """
+        Creates a hint for one of our own items without using the AP !hint command.
+        LocationScouts with create_as_hint is server-supported and does not spend
+        hint points; the only catch is that we need to know which of our locations
+        contains the item first.
+        """
+        location_id = self.__find_known_location_for_item(item_id)
+        if location_id is not None:
+            self.__create_location_hint(location_id)
+            return True
+
+        if not self.all_locations:
+            return False
+
+        self.pending_free_item_hints.add(int(item_id))
+        self.__scout_locations_in_chunks(self.missing_locations or self.all_locations)
+        return True
+
+    def pick_trade_recovery_location(self):
+        candidates = self.__filter_recovery_locations(self.missing_locations)
+        if not candidates:
+            candidates = self.__filter_recovery_locations(self.all_locations)
+        if not candidates:
+            return None
+        return random.choice(candidates)
+
+    def __filter_recovery_locations(self, location_ids):
+        checked = set(self.av.getCheckedLocations())
+        unchecked = [
+            location_id for location_id in location_ids
+            if location_id not in checked and self.__is_trade_recovery_location_safe(location_id)
+        ]
+
+        ttc_treasures = [
+            location_id for location_id in unchecked
+            if LOCATION_ID_TO_NAME.get(location_id, "").startswith("Toontown Central AP Treasure")
+        ]
+        if ttc_treasures:
+            return ttc_treasures
+
+        return unchecked
+
+    def __is_trade_recovery_location_safe(self, location_id: int) -> bool:
+        try:
+            location_def = ap_location_to_definition(location_id)
+        except KeyError:
+            return False
+
+        region_to_hood = {
+            ToontownRegionName.TTC: ToontownGlobals.ToontownCentral,
+            ToontownRegionName.DD: ToontownGlobals.DonaldsDock,
+            ToontownRegionName.DG: ToontownGlobals.DaisyGardens,
+            ToontownRegionName.MML: ToontownGlobals.MinniesMelodyland,
+            ToontownRegionName.TB: ToontownGlobals.TheBrrrgh,
+            ToontownRegionName.DDL: ToontownGlobals.DonaldsDreamland,
+            ToontownRegionName.GS: ToontownGlobals.GoofySpeedway,
+            ToontownRegionName.AA: ToontownGlobals.OutdoorZone,
+            ToontownRegionName.SBHQ: ToontownGlobals.SellbotHQ,
+            ToontownRegionName.CBHQ: ToontownGlobals.CashbotHQ,
+            ToontownRegionName.LBHQ: ToontownGlobals.LawbotHQ,
+            ToontownRegionName.BBHQ: ToontownGlobals.BossbotHQ,
+        }
+
+        if location_def.region in (
+            ToontownRegionName.LOGIN,
+            ToontownRegionName.GALLERY,
+            ToontownRegionName.FISHING,
+            ToontownRegionName.TRAINING,
+            ToontownRegionName.BUILDINGS,
+        ):
+            return True
+        if location_def.region == ToontownRegionName.TTC:
+            return True
+
+        hood = region_to_hood.get(location_def.region)
+        return hood is not None and self.av.hasTeleportAccess(hood)
+
+    def describe_location(self, location_id: int) -> str:
+        try:
+            return self.get_location_name(location_id, self.slot)
+        except Exception:
+            return f"Location {location_id}"
+
+    def __scout_locations_in_chunks(self, locations_to_scout, chunk_size=50):
+        for i in range(0, len(locations_to_scout), chunk_size):
+            scout_packet = LocationScoutsPacket()
+            scout_packet.locations = list(locations_to_scout[i:i + chunk_size])
+            scout_packet.create_as_hint = 0
+            self.send_packet(scout_packet)
+
+    def __find_known_location_for_item(self, item_id: int):
+        for location_id, network_item in self.location_scouts_items.items():
+            if network_item.item == item_id and network_item.player == self.slot:
+                return location_id
+        return None
+
+    def __create_location_hint(self, location_id: int):
+        self.notify.warning(
+            f"[AP TRADE] Creating free hint for {self.get_location_name(location_id, self.slot)} "
+            f"({location_id}) in slot {self.slot_name}"
+        )
+        scout_packet = LocationScoutsPacket()
+        scout_packet.locations = [location_id]
+        scout_packet.create_as_hint = 1
+        self.send_packet(scout_packet)
+
+    def __check_pending_free_item_hints(self, location_id: int, network_item: NetworkItem):
+        item_id = network_item.item
+        if network_item.player != self.slot or item_id not in self.pending_free_item_hints:
+            return
+        self.pending_free_item_hints.remove(item_id)
+        self.__create_location_hint(location_id)
 
     def cache_location_and_item(self, our_location_id: int, owning_player_id: int, item_id: int, item_flag: int = 0):
         """
@@ -407,6 +533,9 @@ class ArchipelagoClient(DirectObject):
         # owning_player_id: The ID of the player that owns the item stored at the location
         # item_id: The ID of the item
         """
+        self.location_scouts_items[our_location_id] = NetworkItem(item_id, our_location_id, owning_player_id, item_flag)
+        self.__check_pending_free_item_hints(our_location_id, self.location_scouts_items[our_location_id])
+
         # We don't need to do this if it's already in our cache. it shouldn't have changed.
         if self.location_scouts_cache.get(our_location_id) is not None:
             return

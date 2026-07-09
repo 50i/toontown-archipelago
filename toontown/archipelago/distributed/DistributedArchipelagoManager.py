@@ -1,7 +1,9 @@
 from typing import List, Dict, Union
 
+from direct.gui.DirectGui import DirectButton, DirectFrame, DirectLabel, DGG
 from direct.directnotify import DirectNotifyGlobal
 from direct.distributed.DistributedObject import DistributedObject
+from panda3d.core import TextNode
 
 from toontown.archipelago.definitions import color_profile
 from toontown.archipelago.definitions.color_profile import ColorProfile
@@ -43,6 +45,8 @@ class DistributedArchipelagoManager(DistributedObject):
         self.notify.debug("DistributedArchipelagoManager starting up....")
 
         self._ap_info_cache: Dict[int, ArchipelagoInformation] = {}
+        self._tradeDialog = None
+        self._tradeRequesterAvId = None
 
     def generate(self):
         self.notify.debug("DistributedArchipelagoManager generate()")
@@ -168,6 +172,14 @@ class DistributedArchipelagoManager(DistributedObject):
 
         return enemies
 
+    def getAllTradeTargets(self) -> List[int]:
+        localAvId = base.localAvatar.getDoId()
+        targets = []
+        for avId in self._ap_info_cache:
+            if avId != localAvId:
+                targets.append(avId)
+        return targets
+
     # Given a team ID, (from self.getToonTeam()) return a ColorProfile.
     def getTeamColorProfile(self, teamId: int) -> ColorProfile:
 
@@ -249,3 +261,96 @@ class DistributedArchipelagoManager(DistributedObject):
         """
         msg = f"{sourceDisplayName} received: {itemName} (found by {fromName})"
         base.localAvatar.sendArchipelagoMessages([msg])
+
+    """
+    Code related to AP trade escrow
+    """
+
+    def d_requestTrade(self, targetAvId, offerIndex, offerItemId, hintItemId):
+        self.sendUpdate('requestTrade', [targetAvId, offerIndex, offerItemId, hintItemId])
+
+    def d_respondTrade(self, requesterAvId, accepted):
+        self.sendUpdate('respondTrade', [requesterAvId, 1 if accepted else 0])
+
+    def tradeRequest(self, requesterAvId, requesterName, offerIndex, offerItemId, hintItemId, offerName, hintName):
+        self._cleanupTradeDialog()
+        self._tradeRequesterAvId = requesterAvId
+        self._tradeDialog = DirectFrame(
+            parent=aspect2dp,
+            relief=DGG.FLAT,
+            frameColor=(0.06, 0.075, 0.09, 0.94),
+            frameSize=(-0.42, 0.42, -0.18, 0.18),
+            pos=(0.62, 0, 0.58)
+        )
+        DirectFrame(
+            parent=self._tradeDialog,
+            relief=DGG.FLAT,
+            frameColor=(0.45, 0.78, 0.96, 1),
+            frameSize=(-0.42, 0.42, 0.155, 0.18)
+        )
+        DirectLabel(
+            parent=self._tradeDialog,
+            relief=None,
+            text=f"Trade from {requesterName}",
+            text_scale=0.036,
+            text_fg=(0.94, 0.97, 1, 1),
+            text_align=TextNode.ALeft,
+            pos=(-0.37, 0, 0.105)
+        )
+        DirectLabel(
+            parent=self._tradeDialog,
+            relief=None,
+            text=f"Give you: {offerName}\nFor their free hint: {hintName}",
+            text_scale=0.03,
+            text_fg=(0.82, 0.88, 0.92, 1),
+            text_wordwrap=24,
+            text_align=TextNode.ALeft,
+            pos=(-0.37, 0, 0.02)
+        )
+        self._makeTradeDialogButton("Accept", (-0.25, 0, -0.115), self._acceptTradeDialog)
+        self._makeTradeDialogButton("Counter", (0, 0, -0.115), self._counterTradeDialog)
+        self._makeTradeDialogButton("Decline", (0.25, 0, -0.115), self._declineTradeDialog)
+
+    def _makeTradeDialogButton(self, text, pos, command):
+        return DirectButton(
+            parent=self._tradeDialog,
+            relief=DGG.FLAT,
+            frameColor=((0.15, 0.20, 0.25, 1), (0.23, 0.31, 0.38, 1), (0.23, 0.31, 0.38, 1), (0.1, 0.1, 0.1, 0.7)),
+            frameSize=(-0.095, 0.095, -0.033, 0.033),
+            text=text,
+            text_fg=(0.94, 0.97, 1, 1),
+            text_scale=0.027,
+            text_pos=(0, -0.009),
+            pos=pos,
+            command=command
+        )
+
+    def _acceptTradeDialog(self):
+        requesterAvId = self._tradeRequesterAvId
+        self._cleanupTradeDialog()
+        if requesterAvId is not None:
+            self.d_respondTrade(requesterAvId, True)
+
+    def _declineTradeDialog(self):
+        requesterAvId = self._tradeRequesterAvId
+        self._cleanupTradeDialog()
+        if requesterAvId is not None:
+            self.d_respondTrade(requesterAvId, False)
+
+    def _counterTradeDialog(self):
+        requesterAvId = self._tradeRequesterAvId
+        self._cleanupTradeDialog()
+        if requesterAvId is not None:
+            self.d_respondTrade(requesterAvId, False)
+            tradeGui = getattr(base.localAvatar, 'tradeGui', None)
+            if tradeGui is not None:
+                tradeGui.openForTarget(requesterAvId)
+
+    def _cleanupTradeDialog(self):
+        if self._tradeDialog is not None:
+            self._tradeDialog.destroy()
+            self._tradeDialog = None
+        self._tradeRequesterAvId = None
+
+    def tradeResult(self, message):
+        base.localAvatar.sendArchipelagoMessages([message])

@@ -1,4 +1,5 @@
 import math
+import time
 import uuid
 from typing import List, Tuple, Union, Any
 
@@ -45,7 +46,7 @@ from toontown.archipelago.apclient.archipelago_session import ArchipelagoSession
 from ..archipelago.apclient.distributed_toon_apmessage_queue import DistributedToonAPMessageQueue
 from ..archipelago.apclient.distributed_toon_reward_queue import DistributedToonRewardQueue
 from ..archipelago.definitions.death_reason import DeathReason
-from ..archipelago.definitions.rewards import EarnedAPReward, TrapReward
+from ..archipelago.definitions.rewards import EarnedAPReward, TrapReward, get_ap_reward_from_id
 from ..archipelago.definitions.util import ap_location_name_to_id
 from ..archipelago.util import win_condition
 from ..archipelago.util.HintContainer import HintedItem
@@ -234,6 +235,7 @@ class DistributedToonAI(DistributedPlayerAI.DistributedPlayerAI, DistributedSmoo
         self.accessKeys: List[int] = []  # List of keys for accessing doors and elevators
         self.receivedItems: List[Tuple[int, int]] = []  # List of AP items received so far, [(index, itemid), (index, itemid)]
         self.checkedLocations: List[int] = []  # List of AP checks we have completed
+        self.apTradeDebts = []
         self.battleSpeed = 2
         self.hintPoints = 0  # How many hint points the player has
         self.hintCostPercentage = 0 # How many points to hint an item, in % of checks.
@@ -241,6 +243,8 @@ class DistributedToonAI(DistributedPlayerAI.DistributedPlayerAI, DistributedSmoo
         self.damageMultiplier = 100
         self.overflowMod = 100
         self.beingShuffled = False
+        self.trapReflectUntil = 0
+        self.trapReflectCharges = 0
 
         self.archipelago_session: ArchipelagoSession = None
         self.apRewardQueue: DistributedToonRewardQueue = DistributedToonRewardQueue(self)
@@ -4568,16 +4572,19 @@ class DistributedToonAI(DistributedPlayerAI.DistributedPlayerAI, DistributedSmoo
 
         self.checkedLocations.append(location)
         self.b_setCheckedLocations(self.checkedLocations)
+        self._advanceAPTradeDebts([location])
 
         if self.archipelago_session:
             self.archipelago_session.complete_check(location)
 
     def addCheckedLocations(self, locations: List[int]):
+        oldLocations = set(self.checkedLocations)
         self.checkedLocations.extend(locations)
         unique = set(self.checkedLocations)
         self.checkedLocations = list(unique)
 
         self.b_setCheckedLocations(self.checkedLocations)
+        self._advanceAPTradeDebts(list(unique - oldLocations))
 
         if self.archipelago_session:
             self.archipelago_session.complete_checks(list(locations))
@@ -4589,6 +4596,92 @@ class DistributedToonAI(DistributedPlayerAI.DistributedPlayerAI, DistributedSmoo
         self.checkedLocations = list(unique)
 
         self.b_setCheckedLocations(self.checkedLocations)
+
+    def b_setAPTradeDebts(self, debts):
+        self.setAPTradeDebts(debts)
+        self.d_setAPTradeDebts()
+
+    def setAPTradeDebts(self, debts):
+        self.apTradeDebts = [self._normalizeAPTradeDebt(debt) for debt in debts]
+
+    def getAPTradeDebts(self):
+        return self.apTradeDebts
+
+    def d_setAPTradeDebts(self):
+        self.sendUpdate('setAPTradeDebts', [self.apTradeDebts])
+
+    def hasAPTradeDebtForItem(self, itemId):
+        return any(debt[1] == itemId for debt in self.apTradeDebts)
+
+    def getEffectiveReceivedItemCount(self, itemId):
+        receivedCount = sum(1 for _rewardIndex, receivedItemId in self.receivedItems if receivedItemId == itemId)
+        debtCount = sum(1 for debt in self.apTradeDebts if debt[1] == itemId)
+        return max(0, receivedCount - debtCount)
+
+    def createAPTradeDebt(self, itemId, recipientName, recoveryLocation=0, required=1):
+        debtId = 910000000000 + (self.doId * 1000000) + int(itemId)
+        while any(debt[0] == debtId for debt in self.apTradeDebts):
+            debtId += 1
+        self.apTradeDebts.append([debtId, int(itemId), int(recoveryLocation or 0), 0, int(required), recipientName])
+        self.b_setAPTradeDebts(self.apTradeDebts)
+        return debtId
+
+    def setAPTradeDebtRecoveryLocation(self, debtId, recoveryLocation):
+        for debt in self.apTradeDebts:
+            if debt[0] == debtId:
+                debt[2] = int(recoveryLocation or 0)
+                self.b_setAPTradeDebts(self.apTradeDebts)
+                return True
+        return False
+
+    def removeAPTradeDebt(self, debtId):
+        originalCount = len(self.apTradeDebts)
+        self.apTradeDebts = [debt for debt in self.apTradeDebts if debt[0] != debtId]
+        if len(self.apTradeDebts) != originalCount:
+            self.b_setAPTradeDebts(self.apTradeDebts)
+            return True
+        return False
+
+    def revokeTradedAPReward(self, rewardDefinition, itemId):
+        if rewardDefinition.revoke(self, itemId):
+            self.d_sendArchipelagoMessage("Traded item effects revoked until recovery completes.")
+            return True
+        return False
+
+    def _advanceAPTradeDebts(self, checkedLocations):
+        if not checkedLocations or not self.apTradeDebts:
+            return
+
+        checkedLocationSet = set(checkedLocations)
+        completed = []
+        remaining = []
+        for debt in self.apTradeDebts:
+            normalized = self._normalizeAPTradeDebt(debt)
+            recoveryLocation = normalized[2]
+            if recoveryLocation and recoveryLocation in checkedLocationSet:
+                normalized[3] = normalized[4]
+            elif not recoveryLocation:
+                normalized[3] = min(normalized[4], normalized[3] + len(checkedLocationSet))
+
+            if normalized[3] >= normalized[4]:
+                completed.append(normalized)
+            else:
+                remaining.append(normalized)
+
+        self.apTradeDebts = remaining
+        self.b_setAPTradeDebts(self.apTradeDebts)
+
+        for debtId, itemId, _recoveryLocation, _progress, _required, recipientName in completed:
+            rewardDefinition = get_ap_reward_from_id(itemId)
+            reward = EarnedAPReward(self, rewardDefinition, debtId, itemId, f"Trade with {recipientName}", True)
+            self.queueAPReward(reward)
+            self.d_sendArchipelagoMessage("Recovered your traded AP item!")
+
+    def _normalizeAPTradeDebt(self, debt):
+        if len(debt) == 5:
+            debtId, itemId, progress, required, recipientName = debt
+            return [debtId, itemId, 0, progress, required, recipientName]
+        return list(debt)
 
     # Called to announce to Archipelago that we need to know what this location ID is so we can receive
     # A LocationInfo packet and keep track of it
@@ -4785,6 +4878,7 @@ class DistributedToonAI(DistributedPlayerAI.DistributedPlayerAI, DistributedSmoo
         self.b_setLastSeed("")
         self.b_setCheckedLocations([])
         self.b_setReceivedItems([])
+        self.b_setAPTradeDebts([])
         self.b_setAccessKeys([])
 
         # Regenerate the toon's UUID used for archipelago connections.
@@ -4819,10 +4913,39 @@ class DistributedToonAI(DistributedPlayerAI.DistributedPlayerAI, DistributedSmoo
     # Stash a trap reward instead of applying it, and let the owning client know what it's holding
     def holdTrap(self, reward: EarnedAPReward):
         self.heldTraps.append(reward)
+        self.b_setHeldTraps(self.heldTraps)
+
+    def removeHeldTrapByReward(self, rewardIndex, itemId):
+        for trapIndex, heldTrap in enumerate(self.heldTraps):
+            if heldTrap.rewardIndex == rewardIndex and heldTrap.itemId == itemId:
+                self.heldTraps.pop(trapIndex)
+                self.b_setHeldTraps(self.heldTraps)
+                return True
+        return False
+
+    def _serializeHeldTraps(self, heldTraps=None):
+        if heldTraps is None:
+            heldTraps = self.heldTraps
+        return [(reward.rewardIndex, reward.itemId) for reward in heldTraps]
+
+    def _deserializeHeldTraps(self, heldTraps):
+        rewards = []
+        for rewardIndex, itemId in heldTraps:
+            rewardDefinition = get_ap_reward_from_id(itemId)
+            if not isinstance(rewardDefinition, TrapReward):
+                continue
+            rewards.append(EarnedAPReward(self, rewardDefinition, rewardIndex, itemId, "Stored Trap", False))
+        return rewards
+
+    def b_setHeldTraps(self, heldTraps):
+        self.setHeldTraps(self._serializeHeldTraps(heldTraps))
         self.d_setHeldTraps()
 
+    def setHeldTraps(self, heldTraps):
+        self.heldTraps = self._deserializeHeldTraps(heldTraps)
+
     def d_setHeldTraps(self):
-        summary = [(index, reward.itemId) for index, reward in enumerate(self.heldTraps)]
+        summary = self._serializeHeldTraps()
         self.sendUpdate('setHeldTraps', [summary])
 
     # Sent by the owning client when they press the "use" button on a held trap.
@@ -4834,24 +4957,110 @@ class DistributedToonAI(DistributedPlayerAI.DistributedPlayerAI, DistributedSmoo
         if not self.isPlayerControlled():
             return
 
-        if index < 0 or index >= len(self.heldTraps):
+        trapIndex = None
+        for heldIndex, heldTrap in enumerate(self.heldTraps):
+            if heldTrap.rewardIndex == index:
+                trapIndex = heldIndex
+                break
+
+        # Older clients used the visible row number. Keep that path working too.
+        if trapIndex is None and 0 <= index < len(self.heldTraps):
+            trapIndex = index
+
+        if trapIndex is None:
             self.d_sendArchipelagoMessage("That trap isn't in your inventory anymore.")
             return
 
-        target = self._findTrapOpponent()
+        reward = self.heldTraps.pop(trapIndex)
+        self.b_setHeldTraps(self.heldTraps)
+
+        selfTarget = getattr(reward.reward, 'self_target', False)
+        target = self if selfTarget else self._findTrapOpponent()
         if target is None:
+            self.heldTraps.insert(trapIndex, reward)
+            self.b_setHeldTraps(self.heldTraps)
             self.d_sendArchipelagoMessage("No opponent found to trap!")
             return
 
-        reward = self.heldTraps.pop(index)
-        self.d_setHeldTraps()
+        reflected = (not selfTarget) and target.isTrapReflectActive()
+        if reflected:
+            remainingCharges = target.consumeTrapReflectCharge()
+            target.d_sendArchipelagoMessage(f"{self.getName()}'s trap bounced off your Trap Reflect!")
+            self.d_sendArchipelagoMessage(
+                f"{target.getName()}'s Trap Reflect bounced your trap back at you! "
+                f"({remainingCharges} reflect{'s' if remainingCharges != 1 else ''} left.)"
+            )
+            target = self
 
-        # Redirect the reward onto the opponent and let it apply as normal
+        # Redirect the reward onto the selected target and let it apply as normal
         reward.av = target
-        reward.fromName = self.getName()
+        reward.fromName = self.getName() if not reflected else "Trap Reflect"
         reward.isLocal = (target.doId == self.doId)
         reward.firer = self
         reward.apply()
+
+    def getTrapReflectUntil(self):
+        return self.trapReflectUntil
+
+    def getTrapReflectCharges(self):
+        return self.trapReflectCharges
+
+    def setTrapReflectUntil(self, trapReflectUntil: int):
+        self.trapReflectUntil = int(trapReflectUntil)
+        taskMgr.remove(self.uniqueName('trap-reflect-expire'))
+        remaining = self.trapReflectUntil - int(time.time())
+        if remaining > 0:
+            taskMgr.doMethodLater(remaining, self._expireTrapReflect, self.uniqueName('trap-reflect-expire'))
+
+    def d_setTrapReflectUntil(self, trapReflectUntil: int):
+        self.sendUpdate('setTrapReflectUntil', [int(trapReflectUntil)])
+
+    def b_setTrapReflectUntil(self, trapReflectUntil: int):
+        self.setTrapReflectUntil(trapReflectUntil)
+        self.d_setTrapReflectUntil(trapReflectUntil)
+
+    def setTrapReflectCharges(self, charges: int):
+        self.trapReflectCharges = max(0, int(charges))
+
+    def d_setTrapReflectCharges(self, charges: int):
+        self.sendUpdate('setTrapReflectCharges', [max(0, int(charges))])
+
+    def b_setTrapReflectCharges(self, charges: int):
+        self.setTrapReflectCharges(charges)
+        self.d_setTrapReflectCharges(charges)
+
+    def activateTrapReflect(self, duration: int, charges: int = 2):
+        until = int(time.time()) + int(duration)
+        self.b_setTrapReflectCharges(charges)
+        self.b_setTrapReflectUntil(until)
+        self.d_sendArchipelagoMessage(f"Trap Reflect is active for 3 minutes ({charges} reflects).")
+
+    def isTrapReflectActive(self) -> bool:
+        if self.trapReflectCharges <= 0 or self.trapReflectUntil <= int(time.time()):
+            if self.trapReflectUntil or self.trapReflectCharges:
+                self.clearTrapReflect()
+            return False
+        return True
+
+    def consumeTrapReflectCharge(self) -> int:
+        if not self.isTrapReflectActive():
+            return 0
+        remaining = max(0, self.trapReflectCharges - 1)
+        self.b_setTrapReflectCharges(remaining)
+        if remaining <= 0:
+            self.clearTrapReflect(sendMessage=True)
+        return remaining
+
+    def clearTrapReflect(self, sendMessage: bool = False):
+        self.b_setTrapReflectUntil(0)
+        self.b_setTrapReflectCharges(0)
+        if sendMessage:
+            self.d_sendArchipelagoMessage("Trap Reflect has no reflects left.")
+
+    def _expireTrapReflect(self, task):
+        self.clearTrapReflect()
+        self.d_sendArchipelagoMessage("Trap Reflect has expired.")
+        return Task.done
 
     # Finds the other AP-controlled player toon anywhere on the shard.
     # Assumes exactly two AP-controlled toons exist (you + your friend).

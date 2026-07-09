@@ -5,9 +5,11 @@ from direct.distributed.DistributedObjectAI import DistributedObjectAI
 
 from toontown.archipelago.apclient.ap_client_enums import APClientEnums
 from toontown.archipelago.apclient.archipelago_session import ArchipelagoSession
+from toontown.archipelago.definitions.rewards import EarnedAPReward, get_ap_reward_from_id
 from toontown.archipelago.util.HintContainer import HintContainer, HintedItem
 from toontown.archipelago.util.archipelago_information import ArchipelagoInformation
 from toontown.toon.DistributedToonAI import DistributedToonAI
+from apworld.toontown import get_item_def_from_id
 
 
 class DistributedArchipelagoManagerAI(DistributedObjectAI):
@@ -19,6 +21,7 @@ class DistributedArchipelagoManagerAI(DistributedObjectAI):
 
         # A cache of the last astron update sent, no need to use
         self.__previousSyncedInformation = []
+        self.__pendingTrades = {}
 
     def announceGenerate(self):
         self.notify.debug(f"DistributedArchipelagoManager announceGenerate() with doId: {self.doId}")
@@ -148,6 +151,125 @@ class DistributedArchipelagoManagerAI(DistributedObjectAI):
 
     def d_broadcastAPReward(self, targetAvId, sourceDisplayName, itemName, fromName):
         self.sendUpdateToAvatarId(targetAvId, 'receiveAPReward', [sourceDisplayName, itemName, fromName])
+
+    """
+    Code related to AP trade escrow
+    """
+
+    def __getItemName(self, itemId):
+        itemDef = get_item_def_from_id(itemId)
+        if itemDef is None:
+            return None
+        return itemDef.name.value
+
+    def __sendTradeResult(self, avId, message):
+        self.sendUpdateToAvatarId(avId, 'tradeResult', [message])
+
+    def __hasReceivedItem(self, toon, rewardIndex, itemId):
+        for receivedIndex, receivedItemId in toon.getReceivedItems():
+            if receivedIndex == rewardIndex and receivedItemId == itemId:
+                return True
+        return False
+
+    def requestTrade(self, targetAvId, offerIndex, offerItemId, hintItemId):
+        requesterAvId = self.air.getAvatarIdFromSender()
+        requester = self.__getToon(requesterAvId)
+        target = self.__getToon(targetAvId)
+        if requester is None or target is None or requesterAvId == targetAvId:
+            self.__sendTradeResult(requesterAvId, "That trade target is not available.")
+            return
+
+        if self.__getSession(requesterAvId) is None:
+            self.__sendTradeResult(requesterAvId, "Connect to Archipelago before trading.")
+            return
+
+        if not self.__hasReceivedItem(requester, offerIndex, offerItemId):
+            self.__sendTradeResult(requesterAvId, "You do not have that AP item to offer.")
+            return
+
+        if requester.hasAPTradeDebtForItem(offerItemId):
+            self.__sendTradeResult(requesterAvId, "Recover that traded item before trading it again.")
+            return
+
+        offerName = self.__getItemName(offerItemId)
+        hintName = self.__getItemName(hintItemId)
+        if offerName is None or hintName is None:
+            self.__sendTradeResult(requesterAvId, "That trade contains an unknown AP item.")
+            return
+
+        self.__pendingTrades[targetAvId] = (requesterAvId, offerIndex, offerItemId, hintItemId)
+        self.sendUpdateToAvatarId(
+            targetAvId,
+            'tradeRequest',
+            [requesterAvId, requester.getName(), offerIndex, offerItemId, hintItemId, offerName, hintName]
+        )
+        self.__sendTradeResult(requesterAvId, f"Trade offered to {target.getName()}.")
+
+    def respondTrade(self, requesterAvId, accepted):
+        targetAvId = self.air.getAvatarIdFromSender()
+        pendingTrade = self.__pendingTrades.get(targetAvId)
+        if pendingTrade is None or pendingTrade[0] != requesterAvId:
+            self.__sendTradeResult(targetAvId, "That trade request is no longer active.")
+            return
+
+        self.__pendingTrades.pop(targetAvId, None)
+        requester = self.__getToon(requesterAvId)
+        target = self.__getToon(targetAvId)
+        if requester is None or target is None:
+            self.__sendTradeResult(targetAvId, "The other toon is no longer available.")
+            return
+
+        requesterAvId, offerIndex, offerItemId, hintItemId = pendingTrade
+        offerName = self.__getItemName(offerItemId)
+        hintName = self.__getItemName(hintItemId)
+        if not accepted:
+            self.__sendTradeResult(requesterAvId, f"{target.getName()} declined your trade.")
+            self.__sendTradeResult(targetAvId, "Trade declined.")
+            return
+
+        if not self.__hasReceivedItem(requester, offerIndex, offerItemId):
+            self.__sendTradeResult(requesterAvId, "Trade cancelled because that AP item is gone.")
+            self.__sendTradeResult(targetAvId, "Trade cancelled because the offered item is gone.")
+            return
+
+        if offerName is None or hintName is None:
+            self.__sendTradeResult(requesterAvId, "Trade cancelled because an item is unknown.")
+            self.__sendTradeResult(targetAvId, "Trade cancelled because an item is unknown.")
+            return
+
+        rewardDefinition = get_ap_reward_from_id(offerItemId)
+        debtId = requester.createAPTradeDebt(offerItemId, target.getName(), 0)
+        revoked = requester.revokeTradedAPReward(rewardDefinition, offerItemId)
+
+        session = self.__getSession(requesterAvId)
+        recoveryLocation = session.client.pick_trade_recovery_location() if session is not None else None
+        if recoveryLocation is None:
+            requester.removeAPTradeDebt(debtId)
+            if revoked:
+                rewardDefinition.apply(requester)
+            self.__sendTradeResult(requesterAvId, "Trade cancelled: no safe recovery location is currently reachable.")
+            self.__sendTradeResult(targetAvId, "Trade cancelled: the offered item would softlock the other player.")
+            return
+
+        requester.setAPTradeDebtRecoveryLocation(debtId, recoveryLocation)
+        recoveryLocationName = session.client.describe_location(recoveryLocation)
+        self.notify.warning(
+            f"[AP TRADE] {requester.getName()} traded away {offerName}; "
+            f"new recovery location in their seed: {recoveryLocationName} ({recoveryLocation})"
+        )
+
+        tradeIndex = 900000000000 + (requesterAvId * 1000000) + offerItemId
+        reward = EarnedAPReward(target, rewardDefinition, tradeIndex, offerItemId, requester.getName(), False)
+        target.queueAPReward(reward)
+        requester.removeHeldTrapByReward(offerIndex, offerItemId)
+
+        hintRequested = session is not None and session.client.request_free_item_hint(hintItemId)
+
+        self.__sendTradeResult(
+            requesterAvId,
+            f"{target.getName()} accepted. {'Creating' if hintRequested else 'Could not create'} a free hint for {hintName}."
+        )
+        self.__sendTradeResult(targetAvId, f"Accepted trade: received {offerName} from {requester.getName()}.")
 
     """
     Code related to hint management

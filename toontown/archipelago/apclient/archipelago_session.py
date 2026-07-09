@@ -211,9 +211,9 @@ class ArchipelagoSession:
 
         # todo add setting in YAML for hinting the scout
         if hint_item and force_broadcast:
-            scout_packet.hint_item = 2
+            scout_packet.create_as_hint = 2
         elif hint_item:
-            scout_packet.hint_item = 1
+            scout_packet.create_as_hint = 1
 
         self.client.send_packet(scout_packet)
 

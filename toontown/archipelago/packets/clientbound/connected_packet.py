@@ -72,6 +72,8 @@ class ConnectedPacket(ClientBoundPacketBase):
 
         # Store this so we don't later ask archipelago about non-existent locations (likely caused by bugs in any apworld in the multiworld)
         client.all_locations = self.missing_locations + self.checked_locations
+        client.missing_locations = list(self.missing_locations)
+        client.checked_locations = list(self.checked_locations)
 
         # Cache this successful connection on the ai
         slot_info = self.get_slot_info(self.slot)

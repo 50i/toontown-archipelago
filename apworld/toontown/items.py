@@ -147,6 +147,7 @@ class ToontownItemName(enum.Enum):
     DRIP_TRAP = "Drip Trap"
     GAG_SHUFFLE_TRAP = "Gag Shuffle Trap"
     EXPOSE_TRAP = "Expose Location Trap"
+    TRAP_REFLECT = "Trap Reflect"
     DAMAGE_15 = "15% Damage Trap"
     DAMAGE_25 = "25% Damage Trap"
 
@@ -298,6 +299,7 @@ ITEM_DEFINITIONS: List[ToontownItemDefinition] = [
     ToontownItemDefinition(ToontownItemName.DRIP_TRAP,             ItemClassification.trap),
     ToontownItemDefinition(ToontownItemName.GAG_SHUFFLE_TRAP,      ItemClassification.trap),
     ToontownItemDefinition(ToontownItemName.EXPOSE_TRAP,           ItemClassification.trap),
+    ToontownItemDefinition(ToontownItemName.TRAP_REFLECT,          ItemClassification.trap),
     ToontownItemDefinition(ToontownItemName.DAMAGE_15,             ItemClassification.trap),
     ToontownItemDefinition(ToontownItemName.DAMAGE_25,             ItemClassification.trap),
     # endregion

@@ -64,6 +64,9 @@ class APReward:
     def apply(self, av: "DistributedToonAI", firer: "DistributedToonAI" = None):
         raise NotImplementedError("Please implement the apply() method!")
 
+    def revoke(self, av: "DistributedToonAI", item_id: int = None):
+        return False
+
 
 # Marker mixin. Rewards that inherit this are held instead of auto-applying to the receiver,
 # so they can later be fired at an arbitrary target toon (see DistributedToonAI.useHeldTrap).
@@ -370,6 +373,10 @@ class GolfPutterReward(APReward):
     def apply(self, av: "DistributedToonAI", firer: "DistributedToonAI" = None):
         av.addAccessKey(ToontownGlobals.PUTTER_KEY)
 
+    def revoke(self, av: "DistributedToonAI", item_id: int = None):
+        av.removeAccessKey(ToontownGlobals.PUTTER_KEY)
+        return True
+
 
 class JokeBookReward(APReward):
     TOONTOWN_CENTRAL = ToontownGlobals.ToontownCentral
@@ -401,6 +408,12 @@ class JokeBookReward(APReward):
         if self.playground in list(FADoorCodes.ZONE_TO_JOKE_CODE.keys()):
             key = FADoorCodes.ZONE_TO_JOKE_CODE[self.playground]
             av.addAccessKey(key)
+
+    def revoke(self, av: "DistributedToonAI", item_id: int = None):
+        if self.playground in list(FADoorCodes.ZONE_TO_JOKE_CODE.keys()):
+            av.removeAccessKey(FADoorCodes.ZONE_TO_JOKE_CODE[self.playground])
+            return True
+        return False
 
 
 class GoKartReward(APReward):
@@ -523,6 +536,16 @@ class AccessKeyReward(APReward):
                 key = FADoorCodes.ZONE_TO_ACCESS_CODE[self.playground]
                 av.addAccessKey(key)
 
+    def revoke(self, av: "DistributedToonAI", item_id: int = None):
+        effectiveCount = av.getEffectiveReceivedItemCount(item_id)
+        if self.playground in list(FADoorCodes.ZONE_TO_ACCESS_CODE.keys()) and effectiveCount <= 1:
+            av.removeAccessKey(FADoorCodes.ZONE_TO_ACCESS_CODE[self.playground])
+        if effectiveCount <= 0:
+            av.removeTeleportAccess(self.playground)
+            for pg in self.LINKED_PGS.get(self.playground, []):
+                av.removeTeleportAccess(pg)
+        return True
+
 
 class FishingLicenseReward(APReward):
     TOONTOWN_CENTRAL = ToontownGlobals.ToontownCentral
@@ -555,6 +578,10 @@ class FishingLicenseReward(APReward):
         # Get the key ID for this playground
         key = LICENSE_TO_ACCESS_CODE[self.playground]
         av.addAccessKey(key)
+
+    def revoke(self, av: "DistributedToonAI", item_id: int = None):
+        av.removeAccessKey(LICENSE_TO_ACCESS_CODE[self.playground])
+        return True
 
 
 class FacilityAccessReward(APReward):
@@ -590,6 +617,10 @@ class FacilityAccessReward(APReward):
     def apply(self, av: "DistributedToonAI", firer: "DistributedToonAI" = None):
         # Get the key ID for this playground
         av.addAccessKey(self.key)
+
+    def revoke(self, av: "DistributedToonAI", item_id: int = None):
+        av.removeAccessKey(self.key)
+        return True
 
 
 class CogDisguiseReward(APReward):
@@ -903,6 +934,24 @@ class GagShuffleAward(APReward, TrapReward):
         av.d_playEmote(EmoteFuncDict['Confused'], 1)
 
 
+class TrapReflectAward(APReward, TrapReward):
+    DURATION_SECONDS = 3 * 60
+    CHARGES = 2
+    self_target = True
+
+    def formatted_header(self) -> str:
+        return global_text_properties.get_raw_formatted_string([
+            MinimalJsonMessagePart("TRAP REFLECT\n", color='yellow'),
+            MinimalJsonMessagePart("Reflects the next 2 traps for 3 minutes!"),
+        ])
+
+    def apply(self, av: "DistributedToonAI", firer: "DistributedToonAI" = None):
+        av.activateTrapReflect(self.DURATION_SECONDS, self.CHARGES)
+        av.playSound('phase_4/audio/sfx/SZ_DD_treasure.ogg')
+        av.d_broadcastHpString("TRAP REFLECT!", (.95, .85, .2))
+        av.d_playEmote(EmoteFuncDict['Resistance Salute'], 1)
+
+
 class GagExpBundleAward(APReward):
 
     def __init__(self, amount: int):
@@ -1170,6 +1219,7 @@ ITEM_NAME_TO_AP_REWARD: [str, APReward] = {
     ToontownItemName.DRIP_TRAP.value: DripTrapAward(),
     ToontownItemName.GAG_SHUFFLE_TRAP.value: GagShuffleAward(),
     ToontownItemName.EXPOSE_TRAP.value: ExposeTrapAward(),
+    ToontownItemName.TRAP_REFLECT.value: TrapReflectAward(),
     ToontownItemName.DAMAGE_15.value: DamageTrapAward(15),
     ToontownItemName.DAMAGE_25.value: DamageTrapAward(25),
     ToontownItemName.VP.value: ProofReward(0),

@@ -974,6 +974,15 @@ struct APItem {
   uint64 id;
 }
 
+struct APTradeDebt {
+  uint64 debtId;
+  uint64 itemId;
+  uint64 recoveryLocation;
+  uint16 progress;
+  uint16 requiredChecks;
+  string recipientName;
+}
+
 
 dclass DistributedToon : DistributedPlayer {
   setDNAString(blob) required broadcast ownrecv db;
@@ -1182,10 +1191,13 @@ dclass DistributedToon : DistributedPlayer {
   setAccessKeys(uint16[] = []) required ownrecv broadcast db;
   setReceivedItems(APItem[]) required ownrecv broadcast db;
   setCheckedLocations(int64[]=[]) required ownrecv broadcast db;
+  setAPTradeDebts(APTradeDebt[] = []) required ownrecv db;
   sendArchipelagoMessages(string[]) ownrecv;
   showReward(int64, string, bool) ownrecv;
-  setHeldTraps(APItem[] = []) ownrecv;
+  setHeldTraps(APItem[] = []) required ownrecv db;
   useHeldTrap(uint32) ownsend airecv;
+  setTrapReflectUntil(uint32 = 0) required ownrecv db;
+  setTrapReflectCharges(uint8 = 0) required ownrecv db;
   updateLocationScoutsCache(LocationScoutsCache[]) ownrecv;
   resetLocationScoutsCache() ownrecv;
   requestHintPoints() ownsend airecv;
@@ -3997,6 +4009,10 @@ dclass DistributedArchipelagoManager : DistributedObject {
   addHint(ArchipelagoHint);
   addHints(ArchipelagoHint[]);
   receiveAPReward(string, string, string);
+  requestTrade(uint32, uint64, uint64, uint64) clsend airecv;
+  respondTrade(uint32, uint8) clsend airecv;
+  tradeRequest(uint32, string, uint64, uint64, uint64, string, string);
+  tradeResult(string);
 };
 
 dclass DistributedInGameNewsMgr : DistributedObjectGlobal {

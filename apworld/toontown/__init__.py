@@ -663,6 +663,7 @@ class ToontownWorld(World):
             ToontownItemName.BEAN_TAX_TRAP_1000.value: (self.options.bean_tax_weight/3),
             ToontownItemName.BEAN_TAX_TRAP_1250.value: (self.options.bean_tax_weight/3),
             ToontownItemName.GAG_SHUFFLE_TRAP.value: self.options.gag_shuffle_weight,
+            ToontownItemName.TRAP_REFLECT.value: 50,
             ToontownItemName.DAMAGE_15.value: (self.options.damage_trap_weight/2),
             ToontownItemName.DAMAGE_25.value: (self.options.damage_trap_weight/2),
         }

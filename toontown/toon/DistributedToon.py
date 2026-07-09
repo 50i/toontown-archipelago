@@ -1,4 +1,5 @@
 from typing import List, Tuple
+import time
 
 from panda3d.core import *
 from libotp import *
@@ -219,6 +220,7 @@ class DistributedToon(DistributedPlayer.DistributedPlayer, Toon.Toon, Distribute
         self.receivedItems: List[Tuple[int, int]] = []
         self.receivedItemIDs: set[int] = set()
         self.checkedLocations: List[int] = []
+        self.apTradeDebts = []
         self.hintPoints = 0
         self.hintCost = 0
         self.battleSpeed = 2
@@ -275,6 +277,8 @@ class DistributedToon(DistributedPlayer.DistributedPlayer, Toon.Toon, Distribute
         self.removeGMIcon()
         self._teardownArchipelagoGui()
         self._teardownTrapsGui()
+        self._teardownTradeGui()
+        self._teardownTrapReflectTimer()
         if self.doId in self.cr.toons:
             del self.cr.toons[self.doId]
         DistributedPlayer.DistributedPlayer.disable(self)
@@ -372,8 +376,9 @@ class DistributedToon(DistributedPlayer.DistributedPlayer, Toon.Toon, Distribute
                 messenger.send(f"{self.getDoId()}-postGenerate", [self.getDoId()])
             else:
                 # This is our own toon -- bring up the persistent Archipelago
-                # connect/held-traps panel now that we're fully generated.
+                # connect/held-traps/trade panels now that we're fully generated.
                 self._setupTrapsGui()
+                self._setupTradeGui()
 
 
     def _handleClientCleanup(self):
@@ -2914,6 +2919,9 @@ class DistributedToon(DistributedPlayer.DistributedPlayer, Toon.Toon, Distribute
     def setReceivedItems(self, receivedItems: List[Tuple[int, int]]):
         self.receivedItems = receivedItems
         self.receivedItemIDs = set(x[1] for x in receivedItems)
+        tradeGui = getattr(self, 'tradeGui', None)
+        if tradeGui is not None:
+            tradeGui.refresh()
 
     # Get a list of item IDs this toon has received via AP
     def getReceivedItems(self) -> List[Tuple[int, int]]:
@@ -2924,6 +2932,15 @@ class DistributedToon(DistributedPlayer.DistributedPlayer, Toon.Toon, Distribute
 
     def getCheckedLocations(self) -> List[int]:
         return self.checkedLocations
+
+    def setAPTradeDebts(self, debts):
+        self.apTradeDebts = debts
+        tradeGui = getattr(self, 'tradeGui', None)
+        if tradeGui is not None:
+            tradeGui.refresh()
+
+    def getAPTradeDebts(self):
+        return getattr(self, 'apTradeDebts', [])
 
     # To be overridden in LocalToon, just here for safety
     def sendArchipelagoMessages(self, messages: List[str]) -> None:
@@ -2950,6 +2967,67 @@ class DistributedToon(DistributedPlayer.DistributedPlayer, Toon.Toon, Distribute
     def d_useHeldTrap(self, index: int) -> None:
         self.sendUpdate('useHeldTrap', [index])
 
+    def setTrapReflectUntil(self, trapReflectUntil: int) -> None:
+        self.trapReflectUntil = int(trapReflectUntil)
+        if self is getattr(base, 'localAvatar', None):
+            self._refreshTrapReflectTimer()
+
+    def getTrapReflectUntil(self) -> int:
+        return getattr(self, 'trapReflectUntil', 0)
+
+    def setTrapReflectCharges(self, charges: int) -> None:
+        self.trapReflectCharges = max(0, int(charges))
+        if self is getattr(base, 'localAvatar', None):
+            self._refreshTrapReflectLabel()
+
+    def getTrapReflectCharges(self) -> int:
+        return getattr(self, 'trapReflectCharges', 0)
+
+    def _refreshTrapReflectTimer(self) -> None:
+        self._teardownTrapReflectTimer()
+        remaining = self.getTrapReflectUntil() - int(time.time())
+        if remaining <= 0:
+            return
+
+        from direct.gui.DirectGui import DirectLabel
+        from panda3d.core import TextNode
+        from toontown.toonbase import ToontownTimer
+
+        self.trapReflectTimer = ToontownTimer.ToontownTimer()
+        self.trapReflectTimer.reparentTo(aspect2dp)
+        self.trapReflectTimer.setScale(0.42)
+        self.trapReflectTimer.setPos(0.98, 0, 0.74)
+        self.trapReflectTimer.countdown(remaining, self._teardownTrapReflectTimer)
+
+        self.trapReflectTimerLabel = DirectLabel(
+            parent=aspect2dp,
+            relief=None,
+            text=f"Reflect x{self.getTrapReflectCharges()}",
+            text_scale=0.045,
+            text_align=TextNode.ACenter,
+            text_fg=(1.0, 0.9, 0.25, 1),
+            pos=(0.98, 0, 0.6)
+        )
+
+    def _refreshTrapReflectLabel(self) -> None:
+        label = getattr(self, 'trapReflectTimerLabel', None)
+        if label is not None:
+            charges = self.getTrapReflectCharges()
+            if charges > 0:
+                label['text'] = f"Reflect x{charges}"
+            else:
+                self._teardownTrapReflectTimer()
+
+    def _teardownTrapReflectTimer(self) -> None:
+        timer = getattr(self, 'trapReflectTimer', None)
+        if timer is not None:
+            timer.destroy()
+            self.trapReflectTimer = None
+        label = getattr(self, 'trapReflectTimerLabel', None)
+        if label is not None:
+            label.destroy()
+            self.trapReflectTimerLabel = None
+
     # Lazily builds our standalone held-traps panel. Fully separate from the AP
     # connect GUI above -- its own background/buttons/labels/toggle.
     def _setupTrapsGui(self) -> None:
@@ -2962,6 +3040,12 @@ class DistributedToon(DistributedPlayer.DistributedPlayer, Toon.Toon, Distribute
         # now so we don't miss whatever the server already told us we're holding.
         self.trapGui.refresh(self.getHeldTraps())
 
+    def _setupTradeGui(self) -> None:
+        if getattr(self, 'tradeGui', None) is not None:
+            return
+        from toontown.archipelago.gui.TradeGUI import TradeGUI
+        self.tradeGui = TradeGUI()
+
     def _teardownArchipelagoGui(self) -> None:
         apGui = getattr(self, 'apGui', None)
         if apGui is not None:
@@ -2973,6 +3057,12 @@ class DistributedToon(DistributedPlayer.DistributedPlayer, Toon.Toon, Distribute
         if trapGui is not None:
             trapGui.destroy()
             self.trapGui = None
+
+    def _teardownTradeGui(self) -> None:
+        tradeGui = getattr(self, 'tradeGui', None)
+        if tradeGui is not None:
+            tradeGui.destroy()
+            self.tradeGui = None
 
     # To be overridden in LocalToon, just here for safety
     def updateLocationScoutsCache(self, cacheTuples: List[Tuple[int, str]]) -> None:
