@@ -1,7 +1,7 @@
 from direct.gui.DirectGui import DirectFrame, DirectButton, DirectLabel, DGG
 from panda3d.core import TextNode
 
-from apworld.toontown.items import ITEM_NAME_TO_ID, get_item_def_from_id
+from apworld.toontown.items import get_item_def_from_id
 
 
 PANEL_POS = (0.74, 0.0, 0.08)
@@ -23,7 +23,7 @@ class TradeGUI(DirectFrame):
     def __init__(self):
         self.targets = []
         self.offerItems = []
-        self.requestItems = sorted((item_id, name) for name, item_id in ITEM_NAME_TO_ID.items())
+        self.requestItems = []
         self.targetIndex = 0
         self.offerIndex = 0
         self.requestIndex = 0
@@ -44,6 +44,15 @@ class TradeGUI(DirectFrame):
             frameColor=PANEL_EDGE,
             frameSize=(-0.46, 0.46, 0.36, 0.39),
             pos=(0, 0, 0)
+        )
+
+        self.controlBackground = DirectFrame(
+            parent=self,
+            relief=DGG.RIDGE,
+            borderWidth=(0.01, 0.01),
+            frameColor=(0.035, 0.045, 0.06, 0.86),
+            frameSize=(-0.40, 0.40, -0.235, 0.235),
+            pos=(0, 0, 0.005)
         )
 
         self.titleLabel = DirectLabel(
@@ -161,6 +170,8 @@ class TradeGUI(DirectFrame):
         manager = getattr(base.cr, 'archipelagoManager', None)
         self.targets = manager.getAllTradeTargets() if manager is not None else []
         self.offerItems = []
+        self.targetIndex = self._clampIndex(self.targetIndex, self.targets)
+        self.requestItems = self._getTargetOwnedItems()
 
         debtItemIds = set(debt[1] for debt in base.localAvatar.getAPTradeDebts())
         for rewardIndex, itemId in base.localAvatar.getReceivedItems():
@@ -170,15 +181,41 @@ class TradeGUI(DirectFrame):
             locked = itemId in debtItemIds
             self.offerItems.append((rewardIndex, itemId, itemDef.name.value, locked))
 
-        self.targetIndex = self._clampIndex(self.targetIndex, self.targets)
         self.offerIndex = self._clampIndex(self.offerIndex, self.offerItems)
         self.requestIndex = self._clampIndex(self.requestIndex, self.requestItems)
         self._refreshLabels()
+
+    def _getTargetOwnedItems(self):
+        if not self.targets:
+            return []
+
+        targetAvId = self.targets[self.targetIndex]
+        target = base.cr.doId2do.get(targetAvId)
+        if target is None or not hasattr(target, 'getReceivedItems'):
+            return []
+
+        debtItemIds = set()
+        if hasattr(target, 'getAPTradeDebts'):
+            debtItemIds = set(debt[1] for debt in target.getAPTradeDebts())
+
+        items = []
+        seenItemIds = set()
+        for _rewardIndex, itemId in target.getReceivedItems():
+            if itemId in seenItemIds or itemId in debtItemIds:
+                continue
+            itemDef = get_item_def_from_id(itemId)
+            if itemDef is None:
+                continue
+            seenItemIds.add(itemId)
+            items.append((itemId, itemDef.name.value))
+        return sorted(items, key=lambda value: value[1])
 
     def openForTarget(self, avId):
         self.refresh()
         if avId in self.targets:
             self.targetIndex = self.targets.index(avId)
+            self.requestItems = self._getTargetOwnedItems()
+            self.requestIndex = self._clampIndex(self.requestIndex, self.requestItems)
         self._refreshLabels()
         self.show()
 
@@ -198,6 +235,9 @@ class TradeGUI(DirectFrame):
             self.sendButton['state'] = DGG.DISABLED
         elif not self.offerItems:
             self.statusLabel['text'] = "No AP items received yet."
+            self.sendButton['state'] = DGG.DISABLED
+        elif not self.requestItems:
+            self.statusLabel['text'] = "Target has no tradeable AP items."
             self.sendButton['state'] = DGG.DISABLED
         elif self.offerItems[self.offerIndex][3]:
             self.statusLabel['text'] = "Recover this item before trading it again."
@@ -255,11 +295,20 @@ class TradeGUI(DirectFrame):
             setattr(self, attr, (getattr(self, attr) + delta) % len(values))
         self._refreshLabels()
 
+    def _cycleTarget(self, delta):
+        if not self.targets:
+            self.targetIndex = 0
+        else:
+            self.targetIndex = (self.targetIndex + delta) % len(self.targets)
+        self.requestItems = self._getTargetOwnedItems()
+        self.requestIndex = self._clampIndex(self.requestIndex, self.requestItems)
+        self._refreshLabels()
+
     def previousTarget(self):
-        self._cycle('targetIndex', self.targets, -1)
+        self._cycleTarget(-1)
 
     def nextTarget(self):
-        self._cycle('targetIndex', self.targets, 1)
+        self._cycleTarget(1)
 
     def previousOffer(self):
         self._cycle('offerIndex', self.offerItems, -1)
