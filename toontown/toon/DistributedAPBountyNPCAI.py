@@ -28,6 +28,7 @@ class DistributedAPBountyNPCAI(DistributedNPCToonBaseAI):
         if len(active) >= MAX_ACTIVE_BOUNTIES:
             self.pendingOffers[avId] = []
             self.sendUpdate('setBountyState', [AP_BOUNTY_MOVIE_FULL, avId, []])
+            self._clear(avId)
             return
 
         offers = [make_bounty(av, slot) for slot in range(BOUNTY_OFFER_COUNT)]

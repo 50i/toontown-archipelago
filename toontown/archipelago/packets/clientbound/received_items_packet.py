@@ -1,6 +1,7 @@
 from typing import List, Tuple
 
 from apworld.toontown import get_item_def_from_id
+from toontown.archipelago.definitions.bounties import choose_bounty_replacement_item_id, get_reward_name
 from toontown.archipelago.definitions.rewards import APReward, get_ap_reward_from_id, EarnedAPReward
 from toontown.archipelago.util.net_utils import NetworkItem
 from toontown.archipelago.packets.clientbound.clientbound_packet_base import ClientBoundPacketBase
@@ -40,6 +41,26 @@ class ReceivedItemsPacket(ClientBoundPacketBase):
                 fromName = client.get_slot_info(item.player).name
                 if client.av.consumeTradedReceivedItem(item.item):
                     self.debug(f"Replaced traded copy of {itemName} from {fromName} with natural AP receipt")
+                elif client.av.consumeBountyReceivedItem(item.item):
+                    replacementItemId = choose_bounty_replacement_item_id()
+                    replacementName = get_reward_name(replacementItemId)
+                    replacementRewardDefinition: APReward = get_ap_reward_from_id(replacementItemId)
+                    replacementReward = EarnedAPReward(
+                        client.av,
+                        replacementRewardDefinition,
+                        reward_index,
+                        replacementItemId,
+                        "Bounty Board Replacement",
+                        True,
+                    )
+                    client.av.queueAPReward(replacementReward)
+                    self.debug(f"Replaced bounty copy of {itemName} from {fromName} with {replacementName}")
+                    client.av.d_sendArchipelagoMessage(
+                        f"Your natural {itemName} became {replacementName} because you already earned it from a bounty."
+                    )
+                    new_items.append((reward_index, replacementItemId))
+                    reward_index += 1
+                    continue
                 else:
                     ap_reward_definition: APReward = get_ap_reward_from_id(item.item)
                     reward: EarnedAPReward = EarnedAPReward(client.av, ap_reward_definition, reward_index, item.item, fromName, item.player == client.slot)

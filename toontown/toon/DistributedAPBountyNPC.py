@@ -17,7 +17,7 @@ AP_BOUNTY_MOVIE_ACCEPT = 2
 AP_BOUNTY_MOVIE_CLOSE = 3
 AP_BOUNTY_MOVIE_FULL = 4
 
-BOUNTY_BOARD_BASE_POS = (138.28, 74.48, 5.03)
+BOUNTY_BOARD_BASE_POS = (138.28, 74.48, 2.53)
 BOUNTY_BOARD_H = 242.11
 BOUNTY_BOARD_BACK_OFFSET = 1.35
 BOUNTY_BOARD_WIDTH = 9.0
@@ -26,7 +26,7 @@ BOUNTY_BOARD_DEPTH = 0.65
 
 # NPC placement is independent of the board; tune these directly.
 BOUNTY_NPC_POS = (134.18, 70.48, 2.53)
-BOUNTY_NPC_H = 51.15
+BOUNTY_NPC_H = 231.15
 
 
 class DistributedAPBountyNPC(DistributedNPCToonBase):
@@ -46,8 +46,6 @@ class DistributedAPBountyNPC(DistributedNPCToonBase):
         self._makeBoard()
 
     def handleCollisionSphereEnter(self, collEntry):
-        if self.isBusyWithLocalToon():
-            return
         self.setBusyWithLocalToon(True)
         self.sendUpdate('avatarEnter', [])
 
@@ -69,7 +67,7 @@ class DistributedAPBountyNPC(DistributedNPCToonBase):
                 self._destroyBountyGui()
                 self.setBusyWithLocalToon(False)
         elif mode == AP_BOUNTY_MOVIE_FULL:
-            self.setChatAbsolute("Finish a bounty first. You've already got four!", CFSpeech | CFTimeout)
+            self.setChatAbsolute("Finish your current bounty first!", CFSpeech | CFTimeout)
             if isLocalToon:
                 self._destroyBountyGui()
                 self.setBusyWithLocalToon(False)
@@ -252,7 +250,7 @@ class DistributedAPBountyNPC(DistributedNPCToonBase):
         localY = BOUNTY_BOARD_BACK_OFFSET
         worldX = BOUNTY_BOARD_BASE_POS[0] + (localX * math.cos(radians)) - (localY * math.sin(radians))
         worldY = BOUNTY_BOARD_BASE_POS[1] + (localX * math.sin(radians)) + (localY * math.cos(radians))
-        return worldX, worldY, BOUNTY_BOARD_BASE_POS[2]
+        return worldX, worldY, BOUNTY_BOARD_BASE_POS[2] + (BOUNTY_BOARD_HEIGHT / 2.0)
 
     def _stopLocalAvatar(self):
         if self.stoppedLocalAvatar:

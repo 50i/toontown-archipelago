@@ -46,7 +46,9 @@ from toontown.archipelago.apclient.archipelago_session import ArchipelagoSession
 from ..archipelago.apclient.distributed_toon_apmessage_queue import DistributedToonAPMessageQueue
 from ..archipelago.apclient.distributed_toon_reward_queue import DistributedToonRewardQueue
 from ..archipelago.definitions.death_reason import DeathReason
-from ..archipelago.definitions.bounties import MAX_ACTIVE_BOUNTIES, get_reward_name, normalize_bounty
+from ..archipelago.definitions.bounties import (MAX_ACTIVE_BOUNTIES, OBJECTIVE_BOSSES, OBJECTIVE_COGS,
+                                                OBJECTIVE_DEPT_PREFIX, OBJECTIVE_ITEM_PREFIX, get_objective_progress, get_objective_text,
+                                                get_reward_name, is_boss_defeat_record, normalize_bounty)
 from ..archipelago.definitions.rewards import EarnedAPReward, TrapReward, TrapStrengthReward, get_ap_reward_from_id
 from ..archipelago.definitions.util import ap_location_name_to_id
 from ..archipelago.util import win_condition
@@ -4542,6 +4544,7 @@ class DistributedToonAI(DistributedPlayerAI.DistributedPlayerAI, DistributedSmoo
     def b_setReceivedItems(self, receivedItems: List[Tuple[int, int]]):
         self.setReceivedItems(receivedItems)
         self.d_setReceivedItems(receivedItems)
+        self.noteAPBountyItemProgress()
 
     # Set the AP items this toon has received but only server side
     def setReceivedItems(self, receivedItems: List[Tuple[int, int]]):
@@ -4564,6 +4567,14 @@ class DistributedToonAI(DistributedPlayerAI.DistributedPlayerAI, DistributedSmoo
         for item in list(self.receivedItems):
             rewardIndex, itemId = item
             if 900000000000 <= rewardIndex < 910000000000 and itemId == ap_item_id:
+                self.receivedItems.remove(item)
+                return True
+        return False
+
+    def consumeBountyReceivedItem(self, ap_item_id: int) -> bool:
+        for item in list(self.receivedItems):
+            rewardIndex, itemId = item
+            if 930000000000 <= rewardIndex < 940000000000 and itemId == ap_item_id:
                 self.receivedItems.remove(item)
                 return True
         return False
@@ -4654,6 +4665,7 @@ class DistributedToonAI(DistributedPlayerAI.DistributedPlayerAI, DistributedSmoo
         self.apBounties.append(bounty)
         self.b_setAPBounties(self.apBounties)
         self.d_sendArchipelagoMessage("Accepted bounty: %s for %s." % (self._formatAPBountyObjective(bounty), get_reward_name(bounty[4])))
+        self.noteAPBountyItemProgress()
         return True
 
     def noteAPBountyCogKills(self, suitsKilled):
@@ -4664,16 +4676,46 @@ class DistributedToonAI(DistributedPlayerAI.DistributedPlayerAI, DistributedSmoo
         remaining = []
         for bounty in self.apBounties:
             bounty = normalize_bounty(bounty)
-            targetDept = bounty[1]
+            target = bounty[1]
             earned = 0
             for suit in suitsKilled:
                 if self.doId not in suit.get('activeToons', []):
                     continue
-                if targetDept == 'any' or suit.get('track') == targetDept:
+                if target == OBJECTIVE_COGS:
+                    earned += 1
+                elif target == OBJECTIVE_BOSSES and is_boss_defeat_record(suit):
+                    earned += 1
+                elif target.startswith(OBJECTIVE_DEPT_PREFIX) and suit.get('track') == target[len(OBJECTIVE_DEPT_PREFIX):]:
                     earned += 1
             if earned:
                 bounty[3] = min(bounty[2], bounty[3] + earned)
                 changed = True
+            if bounty[3] >= bounty[2]:
+                completed.append(bounty)
+            else:
+                remaining.append(bounty)
+        if not changed:
+            return
+
+        self.apBounties = remaining
+        self.b_setAPBounties(self.apBounties)
+        for bounty in completed:
+            self._completeAPBounty(bounty)
+
+    def noteAPBountyItemProgress(self):
+        if not self.apBounties:
+            return
+        changed = False
+        completed = []
+        remaining = []
+        for bounty in self.apBounties:
+            bounty = normalize_bounty(bounty)
+            target = bounty[1]
+            if target.startswith(OBJECTIVE_ITEM_PREFIX):
+                progress = min(bounty[2], get_objective_progress(self, target))
+                if progress != bounty[3]:
+                    bounty[3] = progress
+                    changed = True
             if bounty[3] >= bounty[2]:
                 completed.append(bounty)
             else:
@@ -4703,10 +4745,8 @@ class DistributedToonAI(DistributedPlayerAI.DistributedPlayerAI, DistributedSmoo
         return index
 
     def _formatAPBountyObjective(self, bounty):
-        _bountyId, dept, required, _progress, _itemId = normalize_bounty(bounty)
-        if dept == 'any':
-            return "defeat %s Cogs" % required
-        return "defeat %s %s" % (required, SuitDNA.getDeptFullnameP(dept))
+        _bountyId, target, required, _progress, _itemId = normalize_bounty(bounty)
+        return get_objective_text(target, required).lower()
 
     def hasAPTradeDebtForItem(self, itemId):
         return any(debt[1] == itemId for debt in self.apTradeDebts)
