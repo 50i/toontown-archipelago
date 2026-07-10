@@ -1208,6 +1208,7 @@ dclass DistributedToon : DistributedPlayer {
   setCheckedLocations(int64[]=[]) required ownrecv broadcast db;
   setAPTradeDebts(APTradeDebt[] = []) required ownrecv db;
   setAPBounties(APBounty[] = []) required ownrecv db;
+  requestDeleteAPBounty(uint64) ownsend airecv;
   sendArchipelagoMessages(string[]) ownrecv;
   showReward(int64, string, bool) ownrecv;
   setHeldTraps(APItem[] = []) required ownrecv db;

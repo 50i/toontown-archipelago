@@ -2968,6 +2968,9 @@ class DistributedToon(DistributedPlayer.DistributedPlayer, Toon.Toon, Distribute
     def getAPBounties(self):
         return getattr(self, 'apBounties', [])
 
+    def d_requestDeleteAPBounty(self, bountyId):
+        self.sendUpdate('requestDeleteAPBounty', [int(bountyId)])
+
     # To be overridden in LocalToon, just here for safety
     def sendArchipelagoMessages(self, messages: List[str]) -> None:
         pass

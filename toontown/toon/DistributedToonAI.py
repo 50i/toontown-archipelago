@@ -4668,6 +4668,16 @@ class DistributedToonAI(DistributedPlayerAI.DistributedPlayerAI, DistributedSmoo
         self.noteAPBountyItemProgress()
         return True
 
+    def requestDeleteAPBounty(self, bountyId):
+        if not self.isPlayerControlled():
+            return
+        bountyId = int(bountyId)
+        originalCount = len(self.apBounties)
+        self.apBounties = [bounty for bounty in self.apBounties if normalize_bounty(bounty)[0] != bountyId]
+        if len(self.apBounties) != originalCount:
+            self.b_setAPBounties(self.apBounties)
+            self.d_sendArchipelagoMessage("Deleted active bounty.")
+
     def noteAPBountyCogKills(self, suitsKilled):
         if not self.apBounties or not suitsKilled:
             return

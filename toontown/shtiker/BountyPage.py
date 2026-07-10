@@ -1,4 +1,4 @@
-from direct.gui.DirectGui import DirectFrame, DirectLabel, DGG
+from direct.gui.DirectGui import DirectButton, DirectFrame, DirectLabel, DGG
 from panda3d.core import TextNode
 
 from .ShtikerPage import ShtikerPage
@@ -56,7 +56,7 @@ class BountyPage(ShtikerPage):
         ShtikerPage.exit(self)
 
     def _buildCards(self):
-        positions = ((-0.43, 0.25), (0.43, 0.25), (-0.43, -0.24), (0.43, -0.24))
+        positions = ((0, 0.12), (0, 0.12), (0, 0.12), (0, 0.12))
         for index in range(MAX_ACTIVE_BOUNTIES):
             x, z = positions[index]
             card = DirectFrame(
@@ -64,7 +64,7 @@ class BountyPage(ShtikerPage):
                 relief=DGG.RAISED,
                 borderWidth=(0.012, 0.012),
                 frameColor=(1.0, 0.95, 0.72, 1),
-                frameSize=(-0.34, 0.34, -0.17, 0.17),
+                frameSize=(-0.42, 0.42, -0.27, 0.19),
                 pos=(x, 0, z),
             )
             card.objective = DirectLabel(parent=card, relief=None, text='', text_wordwrap=10.5,
@@ -77,6 +77,7 @@ class BountyPage(ShtikerPage):
             card.reward = DirectLabel(parent=card, relief=None, text='', text_wordwrap=10.5,
                                       text_scale=0.031, text_font=ToontownGlobals.getInterfaceFont(),
                                       text_fg=(0.05, 0.18, 0.35, 1), pos=(0, 0, -0.105))
+            card.deleteButton = self._makeButton(card, "Delete", (0, 0, -0.205), self._deleteBounty)
             self.cards.append(card)
 
     def _refresh(self):
@@ -94,7 +95,32 @@ class BountyPage(ShtikerPage):
                 card.hide()
                 continue
             _bountyId, objective, progress, reward = describe_bounty(bounties[index])
+            card.bountyId = _bountyId
             card.objective['text'] = objective
             card.progress['text'] = progress
             card.reward['text'] = 'Reward: %s' % reward
             card.show()
+
+    def _makeButton(self, parent, text, pos, command):
+        guiButton = loader.loadModel('phase_3/models/gui/quit_button')
+        button = DirectButton(
+            parent=parent,
+            relief=None,
+            image=(guiButton.find('**/QuitBtn_UP'), guiButton.find('**/QuitBtn_DN'), guiButton.find('**/QuitBtn_RLVR')),
+            image_scale=(0.62, 1, 0.78),
+            text=text,
+            text_fg=(0.05, 0.05, 0.05, 1),
+            text_scale=0.035,
+            text_pos=(0, -0.012),
+            pos=pos,
+            scale=0.62,
+            command=command,
+            extraArgs=[parent],
+        )
+        guiButton.removeNode()
+        return button
+
+    def _deleteBounty(self, card):
+        bountyId = getattr(card, 'bountyId', 0)
+        if bountyId and hasattr(base, 'localAvatar'):
+            base.localAvatar.d_requestDeleteAPBounty(bountyId)

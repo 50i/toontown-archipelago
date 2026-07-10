@@ -20,15 +20,15 @@ DEPT_OBJECTIVE_NAMES = {
 }
 
 BOUNTY_OBJECTIVE_TEMPLATES = (
-    (OBJECTIVE_BOSSES, 1, 4),
-    (OBJECTIVE_COGS, 120, 300),
-    (OBJECTIVE_DEPT_PREFIX + 'c', 60, 160),
-    (OBJECTIVE_DEPT_PREFIX + 'l', 60, 160),
-    (OBJECTIVE_DEPT_PREFIX + 'm', 60, 160),
-    (OBJECTIVE_DEPT_PREFIX + 's', 60, 160),
-    (OBJECTIVE_ITEM_PREFIX + ToontownItemName.FISHING_ROD_UPGRADE.value, 2, 4),
-    (OBJECTIVE_ITEM_PREFIX + ToontownItemName.MONEY_CAP_1000.value, 4, 9),
-    (OBJECTIVE_ITEM_PREFIX + ToontownItemName.TASK_CAPACITY.value, 2, 4),
+    (OBJECTIVE_BOSSES, 1, 2),
+    (OBJECTIVE_COGS, 80, 180),
+    (OBJECTIVE_DEPT_PREFIX + 'c', 35, 90),
+    (OBJECTIVE_DEPT_PREFIX + 'l', 35, 90),
+    (OBJECTIVE_DEPT_PREFIX + 'm', 35, 90),
+    (OBJECTIVE_DEPT_PREFIX + 's', 35, 90),
+    (OBJECTIVE_ITEM_PREFIX + ToontownItemName.FISHING_ROD_UPGRADE.value, 2, 3),
+    (OBJECTIVE_ITEM_PREFIX + ToontownItemName.MONEY_CAP_1000.value, 3, 6),
+    (OBJECTIVE_ITEM_PREFIX + ToontownItemName.TASK_CAPACITY.value, 2, 3),
     (OBJECTIVE_ITEM_PREFIX + ToontownItemName.SELLBOT_DISGUISE.value, 1, 1),
     (OBJECTIVE_ITEM_PREFIX + ToontownItemName.CASHBOT_DISGUISE.value, 1, 1),
     (OBJECTIVE_ITEM_PREFIX + ToontownItemName.LAWBOT_DISGUISE.value, 1, 1),
@@ -36,7 +36,7 @@ BOUNTY_OBJECTIVE_TEMPLATES = (
 )
 
 BOUNTY_REWARD_CATEGORIES = (
-    (30, (
+    (28, (
         ToontownItemName.TTC_ACCESS,
         ToontownItemName.DD_ACCESS,
         ToontownItemName.DG_ACCESS,
@@ -50,7 +50,7 @@ BOUNTY_REWARD_CATEGORIES = (
         ToontownItemName.AA_ACCESS,
         ToontownItemName.GS_ACCESS,
     )),
-    (26, (
+    (24, (
         ToontownItemName.FRONT_FACTORY_ACCESS,
         ToontownItemName.SIDE_FACTORY_ACCESS,
         ToontownItemName.COIN_MINT_ACCESS,
@@ -70,7 +70,7 @@ BOUNTY_REWARD_CATEGORIES = (
         ToontownItemName.LAWBOT_DISGUISE,
         ToontownItemName.BOSSBOT_DISGUISE,
     )),
-    (20, (
+    (18, (
         ToontownItemName.TTC_JOKE_BOOK,
         ToontownItemName.DD_JOKE_BOOK,
         ToontownItemName.DG_JOKE_BOOK,
@@ -78,7 +78,38 @@ BOUNTY_REWARD_CATEGORIES = (
         ToontownItemName.TB_JOKE_BOOK,
         ToontownItemName.DDL_JOKE_BOOK,
     )),
+    (18, (
+        ToontownItemName.FISHING_ROD_UPGRADE,
+        ToontownItemName.MONEY_CAP_1000,
+        ToontownItemName.TASK_CAPACITY,
+        ToontownItemName.GAG_CAPACITY_10,
+        ToontownItemName.LAFF_BOOST_4,
+        ToontownItemName.LAFF_BOOST_5,
+    )),
+    (12, (
+        ToontownItemName.TOONUP_FRAME,
+        ToontownItemName.TRAP_FRAME,
+        ToontownItemName.LURE_FRAME,
+        ToontownItemName.SOUND_FRAME,
+        ToontownItemName.THROW_FRAME,
+        ToontownItemName.SQUIRT_FRAME,
+        ToontownItemName.DROP_FRAME,
+    )),
 )
+
+BOUNTY_REWARD_MAX_COUNTS = {
+    ToontownItemName.FISHING_ROD_UPGRADE.value: 4,
+    ToontownItemName.MONEY_CAP_1000.value: 9,
+    ToontownItemName.TASK_CAPACITY.value: 4,
+    ToontownItemName.GAG_CAPACITY_10.value: 2,
+    ToontownItemName.TOONUP_FRAME.value: 7,
+    ToontownItemName.TRAP_FRAME.value: 7,
+    ToontownItemName.LURE_FRAME.value: 7,
+    ToontownItemName.SOUND_FRAME.value: 7,
+    ToontownItemName.THROW_FRAME.value: 7,
+    ToontownItemName.SQUIRT_FRAME.value: 7,
+    ToontownItemName.DROP_FRAME.value: 7,
+}
 
 BOUNTY_REPLACEMENT_CATEGORIES = (
     (42, (
@@ -115,7 +146,7 @@ def choose_bounty_reward_item_id(av=None):
     for _attempt in range(20):
         category = random.choices(BOUNTY_REWARD_CATEGORIES, weights=weights)[0][1]
         item_id = ITEM_NAME_TO_ID[random.choice(category).value]
-        if av is None or _effective_item_count(av, item_id) <= 0:
+        if av is None or _effective_item_count(av, item_id) < _reward_max_count(item_id):
             return item_id
     category = random.choices(BOUNTY_REWARD_CATEGORIES, weights=weights)[0][1]
     return ITEM_NAME_TO_ID[random.choice(category).value]
@@ -206,7 +237,7 @@ def _choose_objective(av):
         if get_objective_progress(av, target) < required:
             available.append((target, required))
     if not available:
-        available = [(OBJECTIVE_BOSSES, random.randint(1, 4)), (OBJECTIVE_COGS, random.randint(120, 300))]
+        available = [(OBJECTIVE_BOSSES, random.randint(1, 2)), (OBJECTIVE_COGS, random.randint(80, 180))]
     return random.choice(available)
 
 
@@ -214,6 +245,13 @@ def _effective_item_count(av, item_id):
     if hasattr(av, 'getEffectiveReceivedItemCount'):
         return av.getEffectiveReceivedItemCount(item_id)
     return sum(1 for _index, received_item_id in av.getReceivedItems() if received_item_id == item_id)
+
+
+def _reward_max_count(item_id):
+    item_def = get_item_def_from_id(item_id)
+    if item_def is None:
+        return 1
+    return BOUNTY_REWARD_MAX_COUNTS.get(item_def.name.value, 1)
 
 
 def _next_bounty_id(av, offer_slot):

@@ -14,6 +14,7 @@ class DistributedAPBountyNPCAI(DistributedNPCToonBaseAI):
         DistributedNPCToonBaseAI.__init__(self, air, npcId)
         self.busy = 0
         self.pendingOffers = {}
+        self.bountyOffers = {}
 
     def avatarEnter(self):
         avId = self.air.getAvatarIdFromSender()
@@ -31,7 +32,10 @@ class DistributedAPBountyNPCAI(DistributedNPCToonBaseAI):
             self._clear(avId)
             return
 
-        offers = [make_bounty(av, slot) for slot in range(BOUNTY_OFFER_COUNT)]
+        offers = self.bountyOffers.get(avId)
+        if not offers:
+            offers = [make_bounty(av, slot) for slot in range(BOUNTY_OFFER_COUNT)]
+            self.bountyOffers[avId] = offers
         self.pendingOffers[avId] = offers
         self.sendUpdate('setBountyState', [AP_BOUNTY_MOVIE_START, avId, offers])
 
@@ -59,6 +63,8 @@ class DistributedAPBountyNPCAI(DistributedNPCToonBaseAI):
             return
 
         av.addAPBounty(selected)
+        if avId in self.bountyOffers:
+            self.bountyOffers[avId] = [offer for offer in self.bountyOffers[avId] if normalize_bounty(offer)[0] != bountyId]
         self.sendUpdate('setBountyState', [AP_BOUNTY_MOVIE_ACCEPT, avId, [selected]])
         self._clear(avId)
 
