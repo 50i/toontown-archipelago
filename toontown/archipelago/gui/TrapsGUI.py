@@ -114,10 +114,10 @@ class TrapsGUI(DirectFrame):
 
         groupedTraps = []
         trapsByItem = {}
-        for index, itemId in heldTraps:
-            trapsByItem.setdefault(itemId, []).append(index)
-        for itemId, indexes in trapsByItem.items():
-            groupedTraps.append((indexes[0], itemId, len(indexes)))
+        for position, (_index, itemId) in enumerate(heldTraps):
+            trapsByItem.setdefault(itemId, []).append(position)
+        for itemId, positions in trapsByItem.items():
+            groupedTraps.append((positions[0], itemId, len(positions)))
         groupedTraps.sort(key=lambda trap: ITEM_ID_TO_LABEL.get(trap[1], f"Trap #{trap[1]}"))
 
         for row, (index, itemId, count) in enumerate(groupedTraps):

@@ -8,10 +8,18 @@ from copy import deepcopy
 from BaseClasses import ItemClassification as IC
 from json import JSONEncoder, JSONDecoder
 
+from apworld.toontown import get_item_def_from_id
 from toontown.archipelago.util.utils import Version, ByValue
 
 ARCHIPELAGO_GAME_NAME = "Toontown"
 ARCHIPELAGO_CLIENT_VERSION = Version(0, 6, 3)
+
+
+def get_local_item_name(client, item_id, player):
+    itemDef = get_item_def_from_id(int(item_id))
+    if itemDef is not None:
+        return itemDef.name.value
+    return client.get_item_name(item_id, player)
 
 
 class JSONMessagePart(typing.TypedDict, total=False):
@@ -324,7 +332,7 @@ class JSONPartFormatter:
 
         # If we were given the ID, override the text
         if part['type'] == 'item_id':
-            part['text'] = self.client.get_item_name(item, part['player'])
+            part['text'] = get_local_item_name(self.client, item, part['player'])
 
         # If we were given name, instead of ID, do same thing basically
         elif part['type'] == 'item_name':
@@ -422,7 +430,7 @@ class JSONtoTextParser(metaclass=HandlerMeta):
 
     def _handle_item_id(self, node: JSONMessagePart):
         item_id = int(node["text"])
-        node["text"] = self.client.get_item_name(item_id, node['player'])
+        node["text"] = get_local_item_name(self.client, item_id, node['player'])
         return self._handle_item_name(node)
 
     def _handle_location_name(self, node: JSONMessagePart):

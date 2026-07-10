@@ -124,6 +124,7 @@ from toontown.toon import DistributedNPCSpecialQuestGiver/AI
 from toontown.toon import DistributedNPCFlippyInToonHall/AI
 from toontown.toon import DistributedNPCScientist/AI
 from toontown.toon import DistributedNPCClerk/AI
+from toontown.toon import DistributedAPVendorNPC/AI
 from toontown.toon import DistributedNPCTailor/AI
 from toontown.toon import DistributedNPCBlocker/AI
 from toontown.toon import DistributedNPCFisherman/AI
@@ -2555,6 +2556,13 @@ dclass DistributedNPCScientist : DistributedNPCToonBase {
 dclass DistributedNPCClerk : DistributedNPCToonBase {
   setMovie(uint8, uint32, uint32, int16) broadcast ram;
   setInventory(blob, int16, uint8, int8) airecv clsend;
+};
+
+dclass DistributedAPVendorNPC : DistributedNPCToonBase {
+  setVendorType(uint8 = 0) required broadcast ram;
+  setVendorState(uint8, uint32, uint16) broadcast;
+  buyRandomItem() airecv clsend;
+  closeShop() airecv clsend;
 };
 
 dclass DistributedNPCTailor : DistributedNPCToonBase {

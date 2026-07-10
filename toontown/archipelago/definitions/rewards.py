@@ -300,14 +300,25 @@ class GagTrainingFrameReward(APReward):
             av.b_setInventory(av.inventory.makeNetString())
 
     def revoke(self, av: "DistributedToonAI", item_id: int = None):
-        oldLevel = av.getTrackAccessLevel(self.track)
+        trackArray = getattr(av, 'trackArray', None) or []
+        if self.track >= len(trackArray):
+            return False
+        oldLevel = trackArray[self.track]
         if oldLevel <= 0:
             return False
-        av.setTrackAccessLevel(self.track, max(1, oldLevel - 1))
+        newLevel = max(0, oldLevel - 1)
+        av.setTrackAccessLevel(self.track, newLevel)
+
         cap = av.experience.getExperienceCapForTrack(self.track)
-        if av.experience.getExp(self.track) > cap:
-            av.experience.setExp(self.track, cap)
-            av.ap_setExperience(av.experience.getCurrentExperience())
+        av.experience.setExp(self.track, min(av.experience.getExp(self.track), cap))
+        av.ap_setExperience(av.experience.getCurrentExperience())
+
+        if av.inventory is not None:
+            firstInvalidGagLevel = min(newLevel, len(ToontownBattleGlobals.Levels[self.track]))
+            for gagLevel in range(firstInvalidGagLevel, len(ToontownBattleGlobals.Levels[self.track])):
+                av.inventory.inventory[self.track][gagLevel] = 0
+            av.inventory.calcTotalProps()
+            av.b_setInventory(av.inventory.makeNetString())
         return True
 
 class GagUpgradeReward(APReward):
@@ -756,6 +767,10 @@ class FishReward(APReward):
         sound = random.choice(sounds)
         av.playSound(sound)
 
+    def revoke(self, av: "DistributedToonAI", item_id: int = None):
+        av.takeMoney(min(self.amount, av.getMoney()))
+        return True
+
 
 class DamageTrapAward(APReward, TrapReward):
 
@@ -929,10 +944,6 @@ class ExposeBeansTrapAward(APReward, TrapReward):
             MinimalJsonMessagePart(" jellybeans."),
         ])
         firer.d_sendArchipelagoMessage(msg)
-        av.d_sendArchipelagoMessage(global_text_properties.get_raw_formatted_string([
-            MinimalJsonMessagePart("[Expose Beans] ", color='yellow'),
-            MinimalJsonMessagePart("Your jellybean count was exposed to your opponent!"),
-        ]))
 
 
 class BeanTaxTrapAward(APReward, TrapReward):
@@ -1060,16 +1071,18 @@ class GagDisableTrapAward(APReward, TrapReward):
         ])
 
     def apply(self, av: "DistributedToonAI", firer: "DistributedToonAI" = None):
+        trackArray = getattr(av, 'trackArray', None) or []
         availableTracks = [
-            track for track in range(len(ToontownBattleGlobals.Tracks))
-            if av.getTrackAccessLevel(track) > 0
+            track for track in range(min(len(ToontownBattleGlobals.Tracks), len(trackArray)))
+            if trackArray[track] > 0 and not av.isGagTrackDisabled(track)
         ]
         if not availableTracks:
             av.d_sendArchipelagoMessage("A gag disable trap fizzled because you have no gag tracks.")
             return
         track = random.choice(availableTracks)
         duration = max(1, math.floor(self.DURATION_SECONDS * get_trap_strength_multiplier(firer)))
-        av.activateGagDisableTrap(track, duration)
+        if not av.activateGagDisableTrap(track, duration) and firer is not None and firer is not av:
+            firer.d_sendArchipelagoMessage("Gag Disable Trap fizzled because the target is on cooldown.")
 
 
 class RaidTrapAward(APReward, TrapReward):
@@ -1167,6 +1180,9 @@ class HealAward(APReward):
         amountPercent = self.amount/100
         heal = math.ceil(amountPercent * av.getMaxHp())
         av.toonUp(heal)
+
+    def revoke(self, av: "DistributedToonAI", item_id: int = None):
+        return True
 
 
 class BossRewardAward(APReward):

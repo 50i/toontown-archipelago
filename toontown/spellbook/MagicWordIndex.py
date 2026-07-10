@@ -3854,6 +3854,19 @@ class Fix(MagicWord):
         return "Opened fix GUI."
 
 
+class Traps(MagicWord):
+    aliases = ['traps']
+    desc = "Grants one of every AP trap."
+    execLocation = MagicWordConfig.EXEC_LOC_SERVER
+    accessLevel = 'NO_ACCESS'
+
+    def handleWord(self, invoker, avId, toon, *args):
+        if invoker != toon:
+            return "You can only grant AP traps to yourself!"
+        toon.giveAllAPTraps()
+        return "Granted AP traps."
+
+
 # Command that forces your state to the 'Walk' state.
 # Used in rare circumstances where your toon gets softlocked to prevent having to restart the game.
 # Note: This is still a cheat so it should only be used when needed, as there are many scenarios where you

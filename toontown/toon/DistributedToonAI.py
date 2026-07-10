@@ -248,6 +248,9 @@ class DistributedToonAI(DistributedPlayerAI.DistributedPlayerAI, DistributedSmoo
         self.trapStrengthPercent = 0
         self.disabledGagTrack = 255
         self.disabledGagTrackUntil = 0
+        self.gagDisableTrapCooldownUntil = 0
+        self.gagDisableInventorySnapshot = None
+        self.gagDisableExperienceSnapshot = None
         self.raidTradeAuthorizedUntil = 0
 
         self.archipelago_session: ArchipelagoSession = None
@@ -4990,14 +4993,13 @@ class DistributedToonAI(DistributedPlayerAI.DistributedPlayerAI, DistributedSmoo
             return
 
         trapIndex = None
-        for heldIndex, heldTrap in enumerate(self.heldTraps):
-            if heldTrap.rewardIndex == index:
-                trapIndex = heldIndex
-                break
-
-        # Older clients used the visible row number. Keep that path working too.
-        if trapIndex is None and 0 <= index < len(self.heldTraps):
+        if 0 <= index < len(self.heldTraps):
             trapIndex = index
+        else:
+            for heldIndex, heldTrap in enumerate(self.heldTraps):
+                if heldTrap.rewardIndex == index:
+                    trapIndex = heldIndex
+                    break
 
         if trapIndex is None:
             self.d_sendArchipelagoMessage("That trap isn't in your inventory anymore.")
@@ -5079,6 +5081,44 @@ class DistributedToonAI(DistributedPlayerAI.DistributedPlayerAI, DistributedSmoo
         self.queueAPReward(EarnedAPReward(self, rewardDefinition, rewardIndex, itemId, "Fix", True))
         self.addReceivedItem(rewardIndex, itemId)
         self.d_sendArchipelagoMessage(f"Fix unlock queued: {itemDefinition.name.value}")
+
+    def giveAllAPTraps(self):
+        from apworld.toontown import ITEM_NAME_TO_ID, ToontownItemName
+
+        trapNames = [
+            ToontownItemName.DRIP_TRAP,
+            ToontownItemName.UBER_TRAP,
+            ToontownItemName.BEAN_TAX_TRAP_750,
+            ToontownItemName.BEAN_TAX_TRAP_1000,
+            ToontownItemName.BEAN_TAX_TRAP_1250,
+            ToontownItemName.GAG_SHUFFLE_TRAP,
+            ToontownItemName.EXPOSE_TRAP,
+            ToontownItemName.EXPOSE_BEANS_TRAP,
+            ToontownItemName.GAG_DISABLE_TRAP,
+            ToontownItemName.TRAP_REFLECT,
+            ToontownItemName.DAMAGE_15,
+            ToontownItemName.DAMAGE_25,
+            ToontownItemName.RAID_TRAP,
+        ]
+
+        usedIndexes = {index for index, _itemId in self.getReceivedItems()}
+        usedIndexes.update(reward.rewardIndex for reward in self.heldTraps)
+        rewardIndex = 3000000000 + ((int(time.time()) % 1000000) * 1000)
+        granted = 0
+        for trapName in trapNames:
+            itemId = ITEM_NAME_TO_ID.get(trapName.value)
+            rewardDefinition = get_ap_reward_from_id(itemId) if itemId is not None else None
+            if not isinstance(rewardDefinition, TrapReward):
+                continue
+            while rewardIndex in usedIndexes:
+                rewardIndex += 1
+                if rewardIndex >= 4294967000:
+                    rewardIndex = 3000000000
+            usedIndexes.add(rewardIndex)
+            self.holdTrap(EarnedAPReward(self, rewardDefinition, rewardIndex, itemId, "Traps", True))
+            granted += 1
+            rewardIndex += 1
+        self.d_sendArchipelagoMessage(f"Granted {granted} AP traps.")
 
     def getTrapReflectUntil(self):
         return self.trapReflectUntil
@@ -5192,6 +5232,14 @@ class DistributedToonAI(DistributedPlayerAI.DistributedPlayerAI, DistributedSmoo
         return self.disabledGagTrack == track and self.disabledGagTrackUntil > int(time.time())
 
     def activateGagDisableTrap(self, track: int, duration: int):
+        now = int(time.time())
+        if self.gagDisableTrapCooldownUntil > now:
+            remaining = self.gagDisableTrapCooldownUntil - now
+            self.d_sendArchipelagoMessage(f"Gag Disable Trap is on cooldown for {remaining} seconds.")
+            return False
+        self.gagDisableTrapCooldownUntil = now + (5 * 60)
+        self.gagDisableInventorySnapshot = self.inventory.makeNetString() if self.inventory is not None else None
+        self.gagDisableExperienceSnapshot = self.experience.getCurrentExperience() if self.experience is not None else None
         until = int(time.time()) + int(duration)
         self.b_setDisabledGagTrack(track)
         self.b_setDisabledGagTrackUntil(until)
@@ -5199,13 +5247,20 @@ class DistributedToonAI(DistributedPlayerAI.DistributedPlayerAI, DistributedSmoo
         self.d_sendArchipelagoMessage(f"{trackName} gags are disabled for {duration} seconds!")
         if self.inventory is not None:
             self.d_setInventory(self.inventory.makeNetString())
+        return True
 
     def clearGagDisableTrap(self, sendMessage: bool = False):
         oldTrack = self.disabledGagTrack
         self.b_setDisabledGagTrack(255)
         self.b_setDisabledGagTrackUntil(0)
-        if self.inventory is not None:
+        if self.gagDisableInventorySnapshot is not None:
+            self.b_setInventory(self.gagDisableInventorySnapshot)
+        elif self.inventory is not None:
             self.d_setInventory(self.inventory.makeNetString())
+        if self.gagDisableExperienceSnapshot is not None:
+            self.b_setExperience(self.gagDisableExperienceSnapshot)
+        self.gagDisableInventorySnapshot = None
+        self.gagDisableExperienceSnapshot = None
         if sendMessage and oldTrack != 255:
             self.d_sendArchipelagoMessage(f"{ToontownBattleGlobals.Tracks[oldTrack]} gags are usable again.")
 

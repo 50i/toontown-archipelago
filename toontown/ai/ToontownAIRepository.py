@@ -59,6 +59,8 @@ from toontown.shtiker.CogPageManagerAI import CogPageManagerAI
 from toontown.spellbook.TTOffMagicWordManagerAI import TTOffMagicWordManagerAI
 from toontown.suit.SuitInvasionManagerAI import SuitInvasionManagerAI
 from toontown.toon import NPCToons
+from toontown.toon import ToonDNA
+from toontown.toon import DistributedAPVendorNPCAI
 from toontown.toonbase import ToontownGlobals, TTLocalizer
 from toontown.tutorial.TutorialManagerAI import TutorialManagerAI
 from toontown.uberdog.DistributedInGameNewsMgrAI import DistributedInGameNewsMgrAI
@@ -364,6 +366,7 @@ class ToontownAIRepository(ToontownInternalRepository):
         )
         self.createHood(CSHoodDataAI, ToontownGlobals.SellbotHQ)
         NPCToons.createNpcsInZone(self, ToontownGlobals.SellbotHQ)
+        self.createAPVendorNPC(ToontownGlobals.SellbotHQ, 0)
 
         # Cashbot HQ
         self.zoneTable[ToontownGlobals.CashbotHQ] = (
@@ -371,6 +374,7 @@ class ToontownAIRepository(ToontownInternalRepository):
         )
         self.createHood(CashbotHQDataAI, ToontownGlobals.CashbotHQ)
         NPCToons.createNpcsInZone(self, ToontownGlobals.CashbotHQ)
+        self.createAPVendorNPC(ToontownGlobals.CashbotHQ, 1)
 
         # Lawbot HQ
         self.zoneTable[ToontownGlobals.LawbotHQ] = (
@@ -378,6 +382,7 @@ class ToontownAIRepository(ToontownInternalRepository):
         )
         self.createHood(LawbotHQDataAI, ToontownGlobals.LawbotHQ)
         NPCToons.createNpcsInZone(self, ToontownGlobals.LawbotHQ)
+        self.createAPVendorNPC(ToontownGlobals.LawbotHQ, 2)
 
         # Bossbot HQ
         self.zoneTable[ToontownGlobals.BossbotHQ] = (
@@ -385,6 +390,7 @@ class ToontownAIRepository(ToontownInternalRepository):
         )
         self.createHood(BossbotHQDataAI, ToontownGlobals.BossbotHQ)
         NPCToons.createNpcsInZone(self, ToontownGlobals.BossbotHQ)
+        self.createAPVendorNPC(ToontownGlobals.BossbotHQ, 3)
 
         # Goofy Speedway
         self.zoneTable[ToontownGlobals.GoofySpeedway] = (
@@ -412,6 +418,28 @@ class ToontownAIRepository(ToontownInternalRepository):
         self.notify.info('Assigning initial Cog buildings and Field Offices...')
         for suitPlanner in self.suitPlanners.values():
             suitPlanner.assignInitialSuitBuildings()
+
+    def createAPVendorNPC(self, zoneId, vendorType):
+        vendorInfo = {
+            0: ("Salesman Sam", "m", ('dss', 'ms', 'm', 'm', 7, 0, 7, 7, 1, 5, 1, 5, 1, 20)),
+            1: ("Banker Brigid", "f", ('mss', 'ss', 'm', 'f', 12, 0, 12, 12, 1, 16, 1, 16, 23, 27)),
+            2: ("James Morgan McGill", "m", ('dls', 'ls', 'l', 'm', 3, 0, 3, 3, 1, 9, 1, 9, 1, 9)),
+            3: ("Stock Trader Trinity", "f", ('rss', 'ms', 'm', 'f', 18, 0, 18, 18, 1, 22, 1, 22, 23, 25)),
+        }
+        name, _gender, dnaList = vendorInfo[vendorType]
+        npcId = 119900 + vendorType
+        npc = DistributedAPVendorNPCAI.DistributedAPVendorNPCAI(self, npcId, vendorType)
+        npc.setName(name)
+        dna = ToonDNA.ToonDNA()
+        dna.newToonFromProperties(*dnaList)
+        npc.setDNAString(dna.makeNetString())
+        npc.setHp(15)
+        npc.setMaxHp(15)
+        npc.setPositionIndex(0)
+        npc.setVendorType(vendorType)
+        npc.generateWithRequired(zoneId)
+        npc.d_setAnimState('neutral', 1.0)
+        return npc
 
     def incrementPopulation(self):
         self.districtStats.b_setAvatarCount(self.districtStats.getAvatarCount() + 1)
@@ -581,4 +609,3 @@ class ToontownAIRepository(ToontownInternalRepository):
 
     def getCachedArchipelagoConnectionInformation(self, avId):
         return self.archipelagoConnectionCache.get(avId, (None, None))
-

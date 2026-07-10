@@ -6,7 +6,7 @@ from direct.distributed.DistributedObjectAI import DistributedObjectAI
 
 from toontown.archipelago.apclient.ap_client_enums import APClientEnums
 from toontown.archipelago.apclient.archipelago_session import ArchipelagoSession
-from toontown.archipelago.definitions.rewards import EarnedAPReward, get_ap_reward_from_id
+from toontown.archipelago.definitions.rewards import EarnedAPReward, TrapReward, get_ap_reward_from_id
 from toontown.archipelago.util.HintContainer import HintContainer, HintedItem
 from toontown.archipelago.util.archipelago_information import ArchipelagoInformation
 from toontown.toon.DistributedToonAI import DistributedToonAI
@@ -246,6 +246,19 @@ class DistributedArchipelagoManagerAI(DistributedObjectAI):
         receiver.queueAPReward(EarnedAPReward(receiver, rewardDefinition, tradeIndex, itemId, sender.getName(), False))
         receiver.addReceivedItem(tradeIndex, itemId)
 
+    def __removeTradedItemFromOwner(self, owner, rewardDefinition, rewardIndex, itemId):
+        revoked = owner.revokeTradedAPReward(rewardDefinition, itemId)
+        heldTrapRemoved = owner.removeHeldTrapByReward(rewardIndex, itemId)
+        if isinstance(rewardDefinition, TrapReward):
+            return 'held-trap' if heldTrapRemoved else None
+        return 'revoked' if revoked else None
+
+    def __restoreRemovedTradedItem(self, owner, rewardDefinition, rewardIndex, itemId, removalMode):
+        if removalMode == 'held-trap':
+            owner.holdTrap(EarnedAPReward(owner, rewardDefinition, rewardIndex, itemId, "Trade rollback", False))
+        elif removalMode == 'revoked':
+            rewardDefinition.apply(owner)
+
     def __chooseRaidTrapLocation(self):
         if self.__raidTrapLocation is not None:
             return self.__raidTrapLocation
@@ -385,6 +398,11 @@ class DistributedArchipelagoManagerAI(DistributedObjectAI):
             self.__sendTradeResult(targetAvId, f"Recover {requestedName} before trading it away.")
             return
 
+        if requester.hasAPTradeDebtForItem(offerItemId):
+            self.__sendTradeResult(requesterAvId, f"Recover {offerName} before trading it away.")
+            self.__sendTradeResult(targetAvId, f"Trade cancelled because {requester.getName()} is still recovering {offerName}.")
+            return
+
         requesterSession = self.__getSession(requesterAvId)
         targetSession = self.__getSession(targetAvId)
         if requesterSession is None or targetSession is None:
@@ -397,8 +415,23 @@ class DistributedArchipelagoManagerAI(DistributedObjectAI):
 
         requesterDebtId = requester.createAPTradeDebt(offerItemId, target.getName(), 0)
         targetDebtId = target.createAPTradeDebt(requestedItemId, requester.getName(), 0)
-        requesterRevoked = requester.revokeTradedAPReward(offerReward, offerItemId)
-        targetRevoked = target.revokeTradedAPReward(requestedReward, requestedItemId)
+        requesterRemoval = self.__removeTradedItemFromOwner(requester, offerReward, offerIndex, offerItemId)
+        targetRemoval = self.__removeTradedItemFromOwner(target, requestedReward, requestedIndex, requestedItemId)
+
+        if requesterRemoval is None or targetRemoval is None:
+            requester.removeAPTradeDebt(requesterDebtId)
+            target.removeAPTradeDebt(targetDebtId)
+            if requesterRemoval is not None:
+                self.__restoreRemovedTradedItem(requester, offerReward, offerIndex, offerItemId, requesterRemoval)
+            if targetRemoval is not None:
+                self.__restoreRemovedTradedItem(target, requestedReward, requestedIndex, requestedItemId, targetRemoval)
+            if requesterRemoval is None:
+                self.__sendTradeResult(requesterAvId, f"Trade cancelled because {offerName} could not be removed from you.")
+                self.__sendTradeResult(targetAvId, f"Trade cancelled because {offerName} could not be removed from {requester.getName()}.")
+            else:
+                self.__sendTradeResult(requesterAvId, f"Trade cancelled because {requestedName} could not be removed from {target.getName()}.")
+                self.__sendTradeResult(targetAvId, f"Trade cancelled because {requestedName} could not be removed from you.")
+            return
 
         requesterRecoveryLocation = requesterSession.client.pick_trade_recovery_location()
         targetRecoveryLocation = targetSession.client.pick_trade_recovery_location()
@@ -406,10 +439,8 @@ class DistributedArchipelagoManagerAI(DistributedObjectAI):
         if requesterRecoveryLocation is None or targetRecoveryLocation is None:
             requester.removeAPTradeDebt(requesterDebtId)
             target.removeAPTradeDebt(targetDebtId)
-            if requesterRevoked:
-                offerReward.apply(requester)
-            if targetRevoked:
-                requestedReward.apply(target)
+            self.__restoreRemovedTradedItem(requester, offerReward, offerIndex, offerItemId, requesterRemoval)
+            self.__restoreRemovedTradedItem(target, requestedReward, requestedIndex, requestedItemId, targetRemoval)
             if requesterRecoveryLocation is None:
                 self.__sendTradeResult(requesterAvId, "Trade cancelled: your offered item has no safe recovery location right now.")
                 self.__sendTradeResult(targetAvId, "Trade cancelled: the item offered to you would softlock the other player.")
@@ -434,8 +465,6 @@ class DistributedArchipelagoManagerAI(DistributedObjectAI):
 
         self.__grantTradedItem(target, requester, offerItemId)
         self.__grantTradedItem(requester, target, requestedItemId)
-        requester.removeHeldTrapByReward(offerIndex, offerItemId)
-        target.removeHeldTrapByReward(requestedIndex, requestedItemId)
 
         self.__sendTradeResult(
             requesterAvId,

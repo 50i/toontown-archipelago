@@ -1,5 +1,6 @@
 from typing import List, Tuple
 
+from apworld.toontown import get_item_def_from_id
 from toontown.archipelago.definitions.rewards import APReward, get_ap_reward_from_id, EarnedAPReward
 from toontown.archipelago.util.net_utils import NetworkItem
 from toontown.archipelago.packets.clientbound.clientbound_packet_base import ClientBoundPacketBase
@@ -33,6 +34,9 @@ class ReceivedItemsPacket(ClientBoundPacketBase):
             # If we need to apply it go ahead and keep track on the toon that we applied this specific reward
             if not_applied_yet:
                 itemName = client.get_item_name(item.item, client.get_local_slot())
+                itemDef = get_item_def_from_id(item.item)
+                if itemDef is not None:
+                    itemName = itemDef.name.value
                 fromName = client.get_slot_info(item.player).name
                 if client.av.consumeTradedReceivedItem(item.item):
                     self.debug(f"Replaced traded copy of {itemName} from {fromName} with natural AP receipt")

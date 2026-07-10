@@ -15,7 +15,7 @@ import certifi
 from websockets import ConnectionClosed, InvalidURI, InvalidMessage
 from websockets.sync.client import connect, ClientConnection
 
-from apworld.toontown import locations
+from apworld.toontown import locations, get_item_def_from_id
 from apworld.toontown.locations import LOCATION_ID_TO_NAME
 from apworld.toontown.options import RewardDisplayOption
 from apworld.toontown.regions import ToontownRegionName
@@ -545,7 +545,8 @@ class ArchipelagoClient(DirectObject):
         someone_elses = owning_player_id != self.slot
 
         owner_name = self.get_slot_info(owning_player_id).name + "'s " if someone_elses else "Your "
-        item_name = self.get_item_name(item_id, owning_player_id)
+        item_def = get_item_def_from_id(item_id)
+        item_name = item_def.name.value if item_def is not None else self.get_item_name(item_id, owning_player_id)
 
         # Handle settings for displaying location rewards.
         # Task Reward Locations.
