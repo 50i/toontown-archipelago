@@ -61,6 +61,7 @@ from toontown.suit.SuitInvasionManagerAI import SuitInvasionManagerAI
 from toontown.toon import NPCToons
 from toontown.toon import ToonDNA
 from toontown.toon import DistributedAPVendorNPCAI
+from toontown.toon import DistributedAPBountyNPCAI
 from toontown.toonbase import ToontownGlobals, TTLocalizer
 from toontown.tutorial.TutorialManagerAI import TutorialManagerAI
 from toontown.uberdog.DistributedInGameNewsMgrAI import DistributedInGameNewsMgrAI
@@ -324,6 +325,7 @@ class ToontownAIRepository(ToontownInternalRepository):
             (ToontownGlobals.PunchlinePlace, 1, 1)
         )
         self.createHood(TTHoodDataAI, ToontownGlobals.ToontownCentral)
+        self.createAPBountyNPC(ToontownGlobals.ToontownCentral)
 
         # Donald's Dock
         self.zoneTable[ToontownGlobals.DonaldsDock] = (
@@ -437,6 +439,19 @@ class ToontownAIRepository(ToontownInternalRepository):
         npc.setMaxHp(15)
         npc.setPositionIndex(0)
         npc.setVendorType(vendorType)
+        npc.generateWithRequired(zoneId)
+        npc.d_setAnimState('neutral', 1.0)
+        return npc
+
+    def createAPBountyNPC(self, zoneId):
+        npc = DistributedAPBountyNPCAI.DistributedAPBountyNPCAI(self, 119920)
+        npc.setName("Bounty Bonnie")
+        dna = ToonDNA.ToonDNA()
+        dna.newToonFromProperties('dss', 'ls', 'l', 'f', 14, 0, 14, 14, 1, 10, 1, 10, 23, 27)
+        npc.setDNAString(dna.makeNetString())
+        npc.setHp(15)
+        npc.setMaxHp(15)
+        npc.setPositionIndex(0)
         npc.generateWithRequired(zoneId)
         npc.d_setAnimState('neutral', 1.0)
         return npc

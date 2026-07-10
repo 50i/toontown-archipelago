@@ -125,6 +125,7 @@ from toontown.toon import DistributedNPCFlippyInToonHall/AI
 from toontown.toon import DistributedNPCScientist/AI
 from toontown.toon import DistributedNPCClerk/AI
 from toontown.toon import DistributedAPVendorNPC/AI
+from toontown.toon import DistributedAPBountyNPC/AI
 from toontown.toon import DistributedNPCTailor/AI
 from toontown.toon import DistributedNPCBlocker/AI
 from toontown.toon import DistributedNPCFisherman/AI
@@ -989,6 +990,14 @@ struct APTradeInventory {
   APItem[] items;
 }
 
+struct APBounty {
+  uint64 bountyId;
+  string targetDept;
+  uint16 requiredCount;
+  uint16 progress;
+  uint64 rewardItemId;
+}
+
 
 dclass DistributedToon : DistributedPlayer {
   setDNAString(blob) required broadcast ownrecv db;
@@ -1198,6 +1207,7 @@ dclass DistributedToon : DistributedPlayer {
   setReceivedItems(APItem[]) required ownrecv broadcast db;
   setCheckedLocations(int64[]=[]) required ownrecv broadcast db;
   setAPTradeDebts(APTradeDebt[] = []) required ownrecv db;
+  setAPBounties(APBounty[] = []) required ownrecv db;
   sendArchipelagoMessages(string[]) ownrecv;
   showReward(int64, string, bool) ownrecv;
   setHeldTraps(APItem[] = []) required ownrecv db;
@@ -2563,6 +2573,12 @@ dclass DistributedAPVendorNPC : DistributedNPCToonBase {
   setVendorState(uint8, uint32, uint16) broadcast;
   buyRandomItem() airecv clsend;
   closeShop() airecv clsend;
+};
+
+dclass DistributedAPBountyNPC : DistributedNPCToonBase {
+  setBountyState(uint8, uint32, APBounty[]) broadcast;
+  acceptBounty(uint64) airecv clsend;
+  closeBountyGui() airecv clsend;
 };
 
 dclass DistributedNPCTailor : DistributedNPCToonBase {

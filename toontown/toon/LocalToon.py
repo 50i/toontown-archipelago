@@ -23,6 +23,7 @@ from toontown.shtiker import InventoryPage
 from toontown.shtiker import MapPage
 from toontown.shtiker import OptionsPage
 from toontown.shtiker import QuestPage
+from toontown.shtiker import BountyPage
 from toontown.shtiker import KartPage
 from toontown.shtiker import GardenPage
 from toontown.shtiker import GolfPage
@@ -283,6 +284,7 @@ class LocalToon(DistributedToon.DistributedToon, LocalAvatar.LocalAvatar):
         del self.mapPage
         del self.invPage
         del self.questPage
+        del self.bountyPage
         del self.suitPage
         del self.sosPage
         del self.disguisePage
@@ -371,6 +373,9 @@ class LocalToon(DistributedToon.DistributedToon, LocalAvatar.LocalAvatar):
         self.questPage = QuestPage.QuestPage()
         self.questPage.load()
         self.book.addPage(self.questPage, pageName=TTLocalizer.QuestPageToonTasks)
+        self.bountyPage = BountyPage.BountyPage()
+        self.bountyPage.load()
+        self.book.addPage(self.bountyPage, pageName=TTLocalizer.BountyPageTitle)
         self.suitPage = SuitPage.SuitPage()
         self.suitPage.load()
         self.book.addPage(self.suitPage, pageName=TTLocalizer.SuitPageTitle)

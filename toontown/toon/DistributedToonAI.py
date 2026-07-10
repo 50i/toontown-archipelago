@@ -46,6 +46,7 @@ from toontown.archipelago.apclient.archipelago_session import ArchipelagoSession
 from ..archipelago.apclient.distributed_toon_apmessage_queue import DistributedToonAPMessageQueue
 from ..archipelago.apclient.distributed_toon_reward_queue import DistributedToonRewardQueue
 from ..archipelago.definitions.death_reason import DeathReason
+from ..archipelago.definitions.bounties import MAX_ACTIVE_BOUNTIES, get_reward_name, normalize_bounty
 from ..archipelago.definitions.rewards import EarnedAPReward, TrapReward, TrapStrengthReward, get_ap_reward_from_id
 from ..archipelago.definitions.util import ap_location_name_to_id
 from ..archipelago.util import win_condition
@@ -236,6 +237,7 @@ class DistributedToonAI(DistributedPlayerAI.DistributedPlayerAI, DistributedSmoo
         self.receivedItems: List[Tuple[int, int]] = []  # List of AP items received so far, [(index, itemid), (index, itemid)]
         self.checkedLocations: List[int] = []  # List of AP checks we have completed
         self.apTradeDebts = []
+        self.apBounties = []
         self.battleSpeed = 2
         self.hintPoints = 0  # How many hint points the player has
         self.hintCostPercentage = 0 # How many points to hint an item, in % of checks.
@@ -4632,6 +4634,80 @@ class DistributedToonAI(DistributedPlayerAI.DistributedPlayerAI, DistributedSmoo
     def d_setAPTradeDebts(self):
         self.sendUpdate('setAPTradeDebts', [self.apTradeDebts])
 
+    def b_setAPBounties(self, bounties):
+        self.setAPBounties(bounties)
+        self.d_setAPBounties()
+
+    def setAPBounties(self, bounties):
+        self.apBounties = [normalize_bounty(bounty) for bounty in bounties]
+
+    def getAPBounties(self):
+        return getattr(self, 'apBounties', [])
+
+    def d_setAPBounties(self):
+        self.sendUpdate('setAPBounties', [self.apBounties])
+
+    def addAPBounty(self, bounty):
+        if len(self.apBounties) >= MAX_ACTIVE_BOUNTIES:
+            return False
+        bounty = normalize_bounty(bounty)
+        self.apBounties.append(bounty)
+        self.b_setAPBounties(self.apBounties)
+        self.d_sendArchipelagoMessage("Accepted bounty: %s for %s." % (self._formatAPBountyObjective(bounty), get_reward_name(bounty[4])))
+        return True
+
+    def noteAPBountyCogKills(self, suitsKilled):
+        if not self.apBounties or not suitsKilled:
+            return
+        changed = False
+        completed = []
+        remaining = []
+        for bounty in self.apBounties:
+            bounty = normalize_bounty(bounty)
+            targetDept = bounty[1]
+            earned = 0
+            for suit in suitsKilled:
+                if self.doId not in suit.get('activeToons', []):
+                    continue
+                if targetDept == 'any' or suit.get('track') == targetDept:
+                    earned += 1
+            if earned:
+                bounty[3] = min(bounty[2], bounty[3] + earned)
+                changed = True
+            if bounty[3] >= bounty[2]:
+                completed.append(bounty)
+            else:
+                remaining.append(bounty)
+        if not changed:
+            return
+
+        self.apBounties = remaining
+        self.b_setAPBounties(self.apBounties)
+        for bounty in completed:
+            self._completeAPBounty(bounty)
+
+    def _completeAPBounty(self, bounty):
+        rewardIndex, _dept, _required, _progress, itemId = normalize_bounty(bounty)
+        rewardDefinition = get_ap_reward_from_id(itemId)
+        rewardIndex = self._nextAPBountyRewardIndex(rewardIndex)
+        self.queueAPReward(EarnedAPReward(self, rewardDefinition, rewardIndex, itemId, "Bounty Board", True))
+        self.addReceivedItem(rewardIndex, itemId)
+        print(f"[AP BOUNTY] {self.getName()} completed bounty; reward {get_reward_name(itemId)} inserted at Bounty Board ({rewardIndex})")
+        self.d_sendArchipelagoMessage("Bounty complete! Reward: %s." % get_reward_name(itemId))
+
+    def _nextAPBountyRewardIndex(self, bountyId):
+        index = 930000000000 + (int(self.doId) * 1000000) + (int(bountyId) % 1000000)
+        usedIndexes = {rewardIndex for rewardIndex, _itemId in self.getReceivedItems()}
+        while index in usedIndexes:
+            index += 1
+        return index
+
+    def _formatAPBountyObjective(self, bounty):
+        _bountyId, dept, required, _progress, _itemId = normalize_bounty(bounty)
+        if dept == 'any':
+            return "defeat %s Cogs" % required
+        return "defeat %s %s" % (required, SuitDNA.getDeptFullnameP(dept))
+
     def hasAPTradeDebtForItem(self, itemId):
         return any(debt[1] == itemId for debt in self.apTradeDebts)
 
@@ -4901,6 +4977,7 @@ class DistributedToonAI(DistributedPlayerAI.DistributedPlayerAI, DistributedSmoo
         self.b_setCheckedLocations([])
         self.b_setReceivedItems([])
         self.b_setAPTradeDebts([])
+        self.b_setAPBounties([])
         self.b_setAccessKeys([])
 
         # Regenerate the toon's UUID used for archipelago connections.

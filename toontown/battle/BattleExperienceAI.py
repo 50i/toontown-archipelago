@@ -186,10 +186,12 @@ def assignRewards(activeToons, toonSkillPtsGained, suitsKilled, zoneId, helpfulT
             if helpfulToons and toon.doId in helpfulToons:
                 simbase.air.questManager.toonKilledCogs(toon, suitsKilled, zoneId, activeToonList)
                 simbase.air.cogPageManager.toonKilledCogs(toon, suitsKilled, zoneId)
+                toon.noteAPBountyCogKills(suitsKilled)
             else:
                 BattleExperienceAINotify.debug('toon=%d unhelpful not getting killed cog quest credit' % toon.doId)
         else:
             simbase.air.questManager.toonKilledCogs(toon, suitsKilled, zoneId, activeToonList)
             simbase.air.cogPageManager.toonKilledCogs(toon, suitsKilled, zoneId)
+            toon.noteAPBountyCogKills(suitsKilled)
 
     return

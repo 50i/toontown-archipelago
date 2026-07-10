@@ -225,6 +225,7 @@ class DistributedToon(DistributedPlayer.DistributedPlayer, Toon.Toon, Distribute
         self.receivedItemIDs: set[int] = set()
         self.checkedLocations: List[int] = []
         self.apTradeDebts = []
+        self.apBounties = []
         self.hintPoints = 0
         self.hintCost = 0
         self.battleSpeed = 2
@@ -2959,6 +2960,13 @@ class DistributedToon(DistributedPlayer.DistributedPlayer, Toon.Toon, Distribute
 
     def getAPTradeDebts(self):
         return getattr(self, 'apTradeDebts', [])
+
+    def setAPBounties(self, bounties):
+        self.apBounties = bounties
+        messenger.send('ap-bounties-updated')
+
+    def getAPBounties(self):
+        return getattr(self, 'apBounties', [])
 
     # To be overridden in LocalToon, just here for safety
     def sendArchipelagoMessages(self, messages: List[str]) -> None:
