@@ -96,7 +96,7 @@ Toontown:
   # Determines how Cog Suit disguises are placed in the item pool.
   # - full_suits: One item per department unlocks the whole suit.
   # - suit_parts: Adds individual suit part items instead.
-  cog_suit_item_mode: 'full_suits'
+  cog_suit_item_mode: 'suit_parts'
 
   ### Completion Settings ###
 

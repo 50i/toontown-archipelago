@@ -573,7 +573,8 @@ class AccessKeyReward(APReward):
         items = base.localAvatar.getReceivedItems()
         for item in items:
             index_received, item_id = item
-            if get_item_def_from_id(item_id).name == self.ZONE_TO_ACCESS_ITEM.get(self.playground, ToontownGlobals.ToontownCentral):
+            item_def = get_item_def_from_id(item_id)
+            if item_def and item_def.name == self.ZONE_TO_ACCESS_ITEM.get(self.playground, ToontownGlobals.ToontownCentral):
                 accessCount += 1
         if accessCount >= 2:
             if self.playground in self.COG_ZONES:

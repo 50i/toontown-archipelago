@@ -203,7 +203,8 @@ class CanRacePoster(QuestsAvailablePoster):
         items = av.getReceivedItems()
         for item in items:
             index_received, item_id = item
-            if get_item_def_from_id(item_id).name == ToontownItemName.GO_KART:
+            item_def = get_item_def_from_id(item_id)
+            if item_def and item_def.name == ToontownItemName.GO_KART:
                 haveItem = True
                 break
 
@@ -252,7 +253,8 @@ class CanGolfPoster(QuestsAvailablePoster):
         items = av.getReceivedItems()
         for item in items:
             index_received, item_id = item
-            if get_item_def_from_id(item_id).name == ToontownItemName.GOLF_PUTTER:
+            item_def = get_item_def_from_id(item_id)
+            if item_def and item_def.name == ToontownItemName.GOLF_PUTTER:
                 haveItem = True
                 break
 
