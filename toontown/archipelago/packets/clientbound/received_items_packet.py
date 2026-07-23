@@ -2,7 +2,7 @@ from typing import List, Tuple
 
 from apworld.toontown import get_item_def_from_id
 from toontown.archipelago.definitions.bounties import choose_bounty_replacement_item_id, get_reward_name
-from toontown.archipelago.definitions.rewards import APReward, get_ap_reward_from_id, EarnedAPReward
+from toontown.archipelago.definitions.rewards import APReward, TrapReward, get_ap_reward_from_id, EarnedAPReward
 from toontown.archipelago.util.net_utils import NetworkItem
 from toontown.archipelago.packets.clientbound.clientbound_packet_base import ClientBoundPacketBase
 
@@ -70,7 +70,8 @@ class ReceivedItemsPacket(ClientBoundPacketBase):
                     # Relay a cosmetic-only notice to other AP-connected toons on the same game
                     # server so they can see this reward too. This does NOT affect their own
                     # Archipelago session, item state, or progression in any way.
-                    client.av.d_broadcastAPRewardToOthers(itemName, fromName)
+                    if not isinstance(ap_reward_definition, TrapReward):
+                        client.av.d_broadcastAPRewardToOthers(itemName, fromName)
                 new_items.append((reward_index, item.item))
 
             # Incrememnt the reward index and go to the next one

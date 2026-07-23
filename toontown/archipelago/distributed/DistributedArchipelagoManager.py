@@ -1,8 +1,11 @@
 from typing import List, Dict, Union
+import math
+import time
 
 from direct.gui.DirectGui import DirectButton, DirectFrame, DirectLabel, DGG
 from direct.directnotify import DirectNotifyGlobal
 from direct.distributed.DistributedObject import DistributedObject
+from direct.task import Task
 from panda3d.core import TextNode
 
 from toontown.archipelago.definitions import color_profile
@@ -48,6 +51,9 @@ class DistributedArchipelagoManager(DistributedObject):
         self._trade_inventory_cache: Dict[int, List[List[int]]] = {}
         self._tradeDialog = None
         self._tradeRequesterAvId = None
+        self._communityPollFrame = None
+        self._communityPollId = None
+        self._communityPollEndTime = 0
 
     def generate(self):
         self.notify.debug("DistributedArchipelagoManager generate()")
@@ -59,6 +65,56 @@ class DistributedArchipelagoManager(DistributedObject):
     def delete(self):
         self.notify.debug("DistributedArchipelagoManager delete()")
         base.cr.archipelagoManager = None
+        self._destroyCommunityPoll()
+
+    def showCommunityPoll(self, pollId, description, duration):
+        self._destroyCommunityPoll()
+        self._communityPollId = pollId
+        self._communityPollEndTime = time.time() + duration
+        self._communityPollFrame = DirectFrame(parent=aspect2d, relief=DGG.RIDGE, frameColor=(0.12, 0.2, 0.38, 0.94), frameSize=(-0.5, 0.5, -0.35, 0.35), pos=(1.5, 0, 0.18), scale=0.72, sortOrder=120)
+        DirectLabel(parent=self._communityPollFrame, relief=None, text='COMMUNITY POLL', text_scale=0.07, text_fg=(1, 0.9, 0.35, 1), pos=(0, 0, 0.23), text_align=TextNode.ACenter)
+        DirectLabel(parent=self._communityPollFrame, relief=None, text=description, text_scale=0.053, text_wordwrap=15, pos=(0, 0, 0.05), text_align=TextNode.ACenter)
+        self._communityPollTimerLabel = DirectLabel(parent=self._communityPollFrame, relief=None, text='', text_scale=0.042, pos=(0, 0, -0.13), text_align=TextNode.ACenter)
+        self._communityPollAgreeButton = DirectButton(parent=self._communityPollFrame, relief='raised', frameColor=(0.2, 0.7, 0.32, 1), frameSize=(-0.22, 0.22, -0.07, 0.07), text='Agree', text_scale=0.055, pos=(-0.16, 0, -0.25), command=self._agreeCommunityPoll)
+        self._communityPollDeclineButton = DirectButton(parent=self._communityPollFrame, relief='raised', frameColor=(0.72, 0.28, 0.28, 1), frameSize=(-0.22, 0.22, -0.07, 0.07), text='Decline', text_scale=0.05, pos=(0.16, 0, -0.25), command=self._declineCommunityPoll)
+        taskMgr.add(self._updateCommunityPollTimer, self.uniqueName('community-poll-countdown'))
+
+    def _agreeCommunityPoll(self):
+        if self._communityPollId is None:
+            return
+        self.sendUpdate('voteCommunityPoll', [self._communityPollId])
+        self._setCommunityPollResponse('Agreed')
+
+    def _declineCommunityPoll(self):
+        if self._communityPollId is None:
+            return
+        self.sendUpdate('declineCommunityPoll', [self._communityPollId])
+        self._setCommunityPollResponse('Declined')
+
+    def _setCommunityPollResponse(self, text):
+        self._communityPollAgreeButton['state'] = DGG.DISABLED
+        self._communityPollDeclineButton['state'] = DGG.DISABLED
+        self._communityPollAgreeButton['text'] = text
+        self._communityPollDeclineButton.hide()
+
+    def _updateCommunityPollTimer(self, task):
+        if self._communityPollTimerLabel is None:
+            return Task.done
+        remaining = max(0, int(math.ceil(self._communityPollEndTime - time.time())))
+        self._communityPollTimerLabel['text'] = f'Voting closes in {remaining}s'
+        return Task.cont
+
+    def clearCommunityPoll(self, pollId):
+        if pollId == self._communityPollId:
+            self._destroyCommunityPoll()
+
+    def _destroyCommunityPoll(self):
+        taskMgr.remove(self.uniqueName('community-poll-countdown'))
+        if self._communityPollFrame:
+            self._communityPollFrame.destroy()
+            self._communityPollFrame = None
+        self._communityPollId = None
+        self._communityPollTimerLabel = None
 
     # Called from the AI. Used to update information that we need to know about toons and their sessions.
     # As the client, we are unaware of most Archipelago things being done on the AI so whatever we need to know
@@ -262,6 +318,10 @@ class DistributedArchipelagoManager(DistributedObject):
         """
         msg = f"{sourceDisplayName} received: {itemName} (found by {fromName})"
         base.localAvatar.sendArchipelagoMessages([msg])
+
+    def receiveAPBroadcast(self, message):
+        """Display a cosmetic server-wide Archipelago announcement."""
+        base.localAvatar.sendArchipelagoMessages([message])
 
     """
     Code related to AP trade escrow

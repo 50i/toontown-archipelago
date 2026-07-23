@@ -666,6 +666,8 @@ class ToontownWorld(World):
             ToontownItemName.GAG_SHUFFLE_TRAP.value: self.options.gag_shuffle_weight * 0.75,
             ToontownItemName.GAG_DISABLE_TRAP.value: self.options.gag_shuffle_weight * 0.55,
             ToontownItemName.TRAP_REFLECT.value: 35,
+            ToontownItemName.RACING_TRAP.value: 20,
+            ToontownItemName.GOLFING_TRAP.value: 20,
             ToontownItemName.DAMAGE_15.value: (self.options.damage_trap_weight * 0.45),
             ToontownItemName.DAMAGE_25.value: (self.options.damage_trap_weight * 0.25),
         }

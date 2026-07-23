@@ -56,6 +56,7 @@ class DeveloperAccountDB(AccountDB):
     "TTOFF_DEVELOPER" access automatically upon login.
     """
     notify = DirectNotifyGlobal.directNotify.newCategory('DeveloperAccountDB')
+    developerPlayTokens = {'player1'}
 
     def lookup(self, playToken, callback):
         # Check if this play token exists in the dbm:
@@ -72,10 +73,13 @@ class DeveloperAccountDB(AccountDB):
                               'reason': 'Your account object (%s) was not found in the database!' % dclass}
                 else:
                     # We already have an account object, so we'll just return what we have.
+                    accessLevel = fields.get('ACCESS_LEVEL', 'NO_ACCESS')
+                    if str(playToken).lower() in self.developerPlayTokens:
+                        accessLevel = 'TTOFF_DEVELOPER'
                     result = {'success': True,
                               'accountId': int(self.dbm[playToken]),
                               'databaseId': playToken,
-                              'accessLevel': fields.get('ACCESS_LEVEL', 'NO_ACCESS')}
+                              'accessLevel': accessLevel}
 
                 callback(result)
 

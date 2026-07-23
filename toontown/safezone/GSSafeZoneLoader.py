@@ -89,13 +89,22 @@ class GSSafeZoneLoader(SafeZoneLoader):
         print('you done!!')
 
     def handleLeftRace(self):
+        returnHood = getattr(base.localAvatar, 'activityTrapReturnHood', None)
+        if returnHood is not None:
+            del base.localAvatar.activityTrapReturnHood
+        else:
+            returnHood = 8000
         req = {'loader': 'safeZoneLoader',
          'where': 'playground',
          'how': 'teleportIn',
-         'zoneId': 8000,
-         'hoodId': 8000,
+         'zoneId': returnHood,
+         'hoodId': returnHood,
          'shardId': None}
-        self.fsm.request('quietZone', [req])
+        if returnHood == self.hood.hoodId:
+            self.fsm.request('quietZone', [req])
+        else:
+            self.doneStatus = req
+            messenger.send(self.doneEvent)
         return
 
     def startSmokeEffect(self):

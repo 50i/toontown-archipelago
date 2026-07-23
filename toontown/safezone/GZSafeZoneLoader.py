@@ -99,11 +99,23 @@ class GZSafeZoneLoader(SafeZoneLoader):
         print('you done!!')
 
     def handleLeftGolf(self):
+        returnHood = getattr(base.localAvatar, 'activityTrapReturnHood', None)
+        if returnHood is not None:
+            del base.localAvatar.activityTrapReturnHood
+        else:
+            returnHood = 17000
         req = {'loader': 'safeZoneLoader',
          'where': 'playground',
          'how': 'teleportIn',
-         'zoneId': 17000,
-         'hoodId': 17000,
+         'zoneId': returnHood,
+         'hoodId': returnHood,
          'shardId': None}
-        self.fsm.request('quietZone', [req])
+        if returnHood == self.hood.hoodId:
+            self.fsm.request('quietZone', [req])
+        else:
+            # A different playground needs to be loaded by PlayGame, not by
+            # the golf hood's loader. Keeping it here leaves the client with
+            # a finished activity but no loaded playground environment.
+            self.doneStatus = req
+            messenger.send(self.doneEvent)
         return

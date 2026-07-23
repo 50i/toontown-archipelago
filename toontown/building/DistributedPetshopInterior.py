@@ -6,6 +6,7 @@ import random
 from direct.distributed import DistributedObject
 from direct.directnotify import DirectNotifyGlobal
 from direct.actor import Actor
+from direct.gui.DirectGui import DirectButton
 from . import ToonInteriorColors
 from toontown.hood import ZoneUtil
 
@@ -14,6 +15,7 @@ class DistributedPetshopInterior(DistributedObject.DistributedObject):
     def __init__(self, cr):
         DistributedObject.DistributedObject.__init__(self, cr)
         self.dnaStore = cr.playGame.dnaStore
+        self.uselessPetShopButton = None
 
     def generate(self):
         DistributedObject.DistributedObject.generate(self)
@@ -97,8 +99,57 @@ class DistributedPetshopInterior(DistributedObject.DistributedObject):
         del self.dnaStore
         del self.randomGenerator
         self.interior.flattenMedium()
+        self._createUselessPetShopButton(hoodId)
+
+    def _createUselessPetShopButton(self, hoodId):
+        """Offer a local tracker control for pet shops with no useful checks."""
+        self.uselessPetShopHoodId = hoodId
+        isMarkedUseless = hoodId in base.settings.get('useless-pet-shop-hoods')
+        self.uselessPetShopButton = DirectButton(
+            parent=base.a2dBottomLeft,
+            relief='raised',
+            frameColor=(0.35, 0.55, 0.35, 1) if isMarkedUseless else (0.8, 0.25, 0.25, 1),
+            frameSize=(-2.0, 2.0, -0.85, 0.85),
+            scale=0.15,
+            pos=(0.34, 0, 0.48),
+            text='Unmark\nDoodles' if isMarkedUseless else 'Mark Doodles\nUseless',
+            text_scale=0.22,
+            text_wordwrap=9,
+            text_align=TextNode.ACenter,
+            command=self.unmarkPetShopUseless if isMarkedUseless else self.markPetShopUseless,
+        )
+
+    def markPetShopUseless(self):
+        markedHoods = list(base.settings.get('useless-pet-shop-hoods'))
+        if self.uselessPetShopHoodId not in markedHoods:
+            markedHoods.append(self.uselessPetShopHoodId)
+            base.settings.set('useless-pet-shop-hoods', sorted(markedHoods))
+            base.settings.write()
+            # MapPage's refresh callback needs no event arguments.
+            messenger.send('petshop-marked-useless')
+
+        if self.uselessPetShopButton:
+            self.uselessPetShopButton.destroy()
+            self.uselessPetShopButton = None
+        self._createUselessPetShopButton(self.uselessPetShopHoodId)
+
+    def unmarkPetShopUseless(self):
+        markedHoods = list(base.settings.get('useless-pet-shop-hoods'))
+        if self.uselessPetShopHoodId in markedHoods:
+            markedHoods.remove(self.uselessPetShopHoodId)
+            base.settings.set('useless-pet-shop-hoods', markedHoods)
+            base.settings.write()
+            messenger.send('petshop-marked-useless')
+
+        if self.uselessPetShopButton:
+            self.uselessPetShopButton.destroy()
+            self.uselessPetShopButton = None
+        self._createUselessPetShopButton(self.uselessPetShopHoodId)
 
     def disable(self):
+        if self.uselessPetShopButton:
+            self.uselessPetShopButton.destroy()
+            self.uselessPetShopButton = None
         self.fish.stop()
         self.fish.cleanup()
         del self.fish

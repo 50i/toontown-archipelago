@@ -1,4 +1,5 @@
 import random
+import time
 from typing import Union, List
 
 from direct.directnotify import DirectNotifyGlobal
@@ -11,11 +12,15 @@ from toontown.archipelago.util.HintContainer import HintContainer, HintedItem
 from toontown.archipelago.util.archipelago_information import ArchipelagoInformation
 from toontown.toon.DistributedToonAI import DistributedToonAI
 from toontown.coghq.CogDisguiseGlobals import PartsPerSuitBitmasks
-from apworld.toontown import ITEM_NAME_TO_ID, ToontownItemName, get_item_def_from_id
+from apworld.toontown import FISHING_LICENSES, ITEM_DEFINITIONS, ITEM_NAME_TO_ID, ToontownItemName, get_item_def_from_id
+from apworld.toontown.fish import FishProgression
 
 
 class DistributedArchipelagoManagerAI(DistributedObjectAI):
     notify = DirectNotifyGlobal.directNotify.newCategory("DistributedArchipelagoManagerAI")
+    COMMUNITY_POLL_MIN_SECONDS = 10 * 60
+    COMMUNITY_POLL_MAX_SECONDS = 15 * 60
+    COMMUNITY_POLL_DURATION_SECONDS = 30
 
     def __init__(self, air):
         super().__init__(air)
@@ -26,9 +31,169 @@ class DistributedArchipelagoManagerAI(DistributedObjectAI):
         self.__pendingTrades = {}
         self.__raidTrapLocation = None
         self.__raidTrapClaimedBy = 0
+        self.__communityPoll = None
+        self.__communityPollSequence = 0
+
+    def delete(self):
+        taskMgr.remove(self.uniqueName('community-poll-start'))
+        taskMgr.remove(self.uniqueName('community-poll-resolve'))
+        super().delete()
 
     def announceGenerate(self):
         self.notify.debug(f"DistributedArchipelagoManager announceGenerate() with doId: {self.doId}")
+        self.__scheduleCommunityPoll()
+
+    def __scheduleCommunityPoll(self):
+        taskMgr.remove(self.uniqueName('community-poll-start'))
+        delay = random.randint(self.COMMUNITY_POLL_MIN_SECONDS, self.COMMUNITY_POLL_MAX_SECONDS)
+        taskMgr.doMethodLater(delay, self.__startScheduledCommunityPoll, self.uniqueName('community-poll-start'))
+
+    def __startScheduledCommunityPoll(self, task):
+        self.startCommunityPoll()
+        return task.done
+
+    def __getPollParticipants(self):
+        return [toon for toon in self.air.doFindAllInstances(DistributedToonAI) if toon.isPlayerControlled()]
+
+    def startCommunityPoll(self):
+        """Start one shared poll. Also invoked by the developer testing magic word."""
+        if self.__communityPoll is not None:
+            return False
+        taskMgr.remove(self.uniqueName('community-poll-start'))
+
+        participants = self.__getPollParticipants()
+        if not participants:
+            self.__scheduleCommunityPoll()
+            return False
+
+        outcome = random.choice(('grant_both', 'grant_one', 'trap_one', 'trap_both'))
+        payload, description = self.__createCommunityPollPayload(outcome, participants)
+        self.__communityPollSequence += 1
+        pollId = self.__communityPollSequence
+        self.__communityPoll = {
+            'id': pollId,
+            'outcome': outcome,
+            'payload': payload,
+            'description': description,
+            'participants': {toon.doId for toon in participants},
+            'responses': {},
+        }
+        for toon in participants:
+            self.sendUpdateToAvatarId(toon.doId, 'showCommunityPoll', [pollId, description, self.COMMUNITY_POLL_DURATION_SECONDS])
+        taskMgr.doMethodLater(self.COMMUNITY_POLL_DURATION_SECONDS, self.__resolveCommunityPoll, self.uniqueName('community-poll-resolve'))
+        return True
+
+    def voteCommunityPoll(self, pollId):
+        self.__recordCommunityPollResponse(pollId, True)
+
+    def declineCommunityPoll(self, pollId):
+        self.__recordCommunityPollResponse(pollId, False)
+
+    def __recordCommunityPollResponse(self, pollId, agrees):
+        avId = self.air.getAvatarIdFromSender()
+        poll = self.__communityPoll
+        if poll is None or poll['id'] != pollId or avId not in poll['participants']:
+            return
+        poll['responses'][avId] = agrees
+        if len(poll['responses']) == len(poll['participants']):
+            # Do not make everyone wait out the clock once every player has voted.
+            taskMgr.remove(self.uniqueName('community-poll-resolve'))
+            taskMgr.doMethodLater(0, self.__resolveCommunityPoll, self.uniqueName('community-poll-resolve'))
+
+    def __resolveCommunityPoll(self, task):
+        poll = self.__communityPoll
+        if poll is None:
+            self.__scheduleCommunityPoll()
+            return task.done
+
+        participants = [self.air.doId2do.get(avId) for avId in poll['participants']]
+        participants = [toon for toon in participants if toon is not None and toon.isPlayerControlled()]
+        voteCount = sum(poll['responses'].get(toon.doId, False) for toon in participants)
+        allOnlineAgreed = bool(participants) and all(poll['responses'].get(toon.doId) is True for toon in participants)
+        successChance = 1.0 if allOnlineAgreed else 0.55 if voteCount == 1 else 0.75 if voteCount >= 2 else 0.0
+        succeeded = bool(participants) and random.random() < successChance
+        outcomeMessage = 'Nothing happened.'
+        if succeeded:
+            outcomeMessage = self.__applyCommunityPollOutcome(poll, participants)
+
+        result = 'passed!' if succeeded else 'did not pass.'
+        announcement = f"Community poll {result} {outcomeMessage}"
+        for toon in participants:
+            self.sendUpdateToAvatarId(toon.doId, 'clearCommunityPoll', [poll['id']])
+        self.broadcastAPMessage(announcement)
+        self.__communityPoll = None
+        self.__scheduleCommunityPoll()
+        return task.done
+
+    def __usesFishingLicenses(self, toon):
+        fishProgression = toon.slotData.get('fish_progression', FishProgression.Nonne)
+        return fishProgression in (FishProgression.LicensesAndRods, FishProgression.Licenses)
+
+    def __choosePollItem(self, targets):
+        excludedItems = {
+            ToontownItemName.VP,
+            ToontownItemName.CFO,
+            ToontownItemName.CJ,
+            ToontownItemName.CEO,
+        }
+        licensesEnabled = all(self.__usesFishingLicenses(toon) for toon in targets)
+        return random.choice([
+            itemDef for itemDef in ITEM_DEFINITIONS
+            if not isinstance(get_ap_reward_from_id(itemDef.unique_id), TrapReward)
+            and itemDef.name not in excludedItems
+            and (itemDef.name not in FISHING_LICENSES or licensesEnabled)
+        ])
+
+    def __choosePollTrap(self):
+        return random.choice([itemDef for itemDef in ITEM_DEFINITIONS
+                              if itemDef.name != ToontownItemName.RAID_TRAP
+                              and isinstance(get_ap_reward_from_id(itemDef.unique_id), TrapReward)])
+
+    def __createCommunityPollPayload(self, outcome, participants):
+        if outcome == 'grant_both':
+            itemDef = self.__choosePollItem(participants)
+            return {'itemId': itemDef.unique_id, 'targetIds': [toon.doId for toon in participants]}, f"Grant {itemDef.name.value} to both Toons"
+        if outcome == 'grant_one':
+            target = random.choice(participants)
+            itemDef = self.__choosePollItem([target])
+            return {'itemId': itemDef.unique_id, 'targetIds': [target.doId]}, f"Grant {itemDef.name.value} to {target.getName()}"
+
+        trapDef = self.__choosePollTrap()
+        targets = participants if outcome == 'trap_both' else [random.choice(participants)]
+        targetNames = 'both Toons' if outcome == 'trap_both' else targets[0].getName()
+        return {'itemId': trapDef.unique_id, 'targetIds': [toon.doId for toon in targets]}, f"Trigger {trapDef.name.value} on {targetNames}"
+
+    def __grantPollItem(self, toon, itemDef):
+        rewardIndex = int(time.time() * 1000000) + toon.doId
+        usedIndexes = {index for index, _itemId in toon.getReceivedItems()}
+        while rewardIndex in usedIndexes:
+            rewardIndex += 1
+        toon.queueAPReward(EarnedAPReward(toon, get_ap_reward_from_id(itemDef.unique_id), rewardIndex, itemDef.unique_id, 'Community Poll', True))
+        toon.addReceivedItem(rewardIndex, itemDef.unique_id)
+
+    def __applyCommunityPollOutcome(self, poll, participants):
+        itemDef = get_item_def_from_id(poll['payload']['itemId'])
+        targets = [self.air.doId2do.get(avId) for avId in poll['payload']['targetIds']]
+        targets = [toon for toon in targets if toon is not None and toon.isPlayerControlled()]
+        if itemDef is None or not targets:
+            return 'Nothing happened because the selected Toon was no longer online.'
+
+        targetNames = ', '.join(toon.getName() for toon in targets)
+        if poll['outcome'].startswith('grant'):
+            for toon in targets:
+                self.__grantPollItem(toon, itemDef)
+                self.broadcastAPReward(toon.doId, itemDef.name.value, 'Community Poll')
+            return f"Community Poll granted {itemDef.name.value} to {targetNames}."
+
+        reward = get_ap_reward_from_id(itemDef.unique_id)
+        for toon in targets:
+            reward.apply(toon)
+        return f"Community Poll triggered {itemDef.name.value} on {targetNames}."
+
+    def broadcastAPMessage(self, message):
+        """Send a cosmetic Archipelago announcement to every online Toon."""
+        for toon in self.__getPollParticipants():
+            self.sendUpdateToAvatarId(toon.doId, 'receiveAPBroadcast', [message])
 
     """
     Internal methods to make management easier

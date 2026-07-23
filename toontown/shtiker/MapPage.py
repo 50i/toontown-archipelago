@@ -168,6 +168,7 @@ class MapPage(ShtikerPage.ShtikerPage):
 
         cloudModel.removeNode()
         self.resetFrameSize()
+        self.accept('petshop-marked-useless', self.updateTasksAvailableFrames)
         return
 
     def showTasksAvailableFrame(self, hood, hoodIndex, pos):
@@ -204,7 +205,7 @@ class MapPage(ShtikerPage.ShtikerPage):
             else:
                 continue
 
-    def updateTasksAvailableFrames(self):
+    def updateTasksAvailableFrames(self, *_unusedEventArgs):
 
         # Loop through all the posters
         for questPoster, fishPoster, treasurePoster, petPoster, racePoster, golfPoster in zip(self.questsAvailableIcons, self.fishAvailableIcons, self.treasureAvailableIcons, self.petsAvailableIcons, self.raceIcons, self.golfIcons):

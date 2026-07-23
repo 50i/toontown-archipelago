@@ -76,6 +76,7 @@ class Settings:
         "experimental-multithreading": False,
         'discord-rich-presence': False,
         "color-blind-mode": False,
+        "useless-pet-shop-hoods": [],
     }
     settingsFile = Path.home() / "Documents" / "Toontown Archipelago" / "settings.json"
 

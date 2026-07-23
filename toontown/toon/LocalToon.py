@@ -45,6 +45,7 @@ from toontown.catalog import CatalogNotifyDialog
 from toontown.chat import ToontownChatManager, ResistanceChat
 from toontown.chat import TTTalkAssistant
 from toontown.estate import GardenGlobals
+from toontown.hood import ZoneUtil
 from toontown.battle.BattleSounds import *
 from toontown.battle import Fanfare
 from toontown.parties import PartyGlobals
@@ -2140,10 +2141,15 @@ class LocalToon(DistributedToon.DistributedToon, LocalAvatar.LocalAvatar):
         super().setSlotData(slotData)
         self.doAreaSanityCheck()
 
+    def setReceivedItems(self, receivedItems) -> None:
+        super().setReceivedItems(receivedItems)
+        self.doAreaSanityCheck()
+
     def enterPlaceWalk(self):
-        if self.hasConnected():
-            self.startAreaSanityCheck()
-        else:
+        # Area access must be checked after every completed place load, even
+        # while Archipelago is still reconnecting.
+        self.startAreaSanityCheck()
+        if not self.hasConnected():
             self.setArchipelagoAuto()
 
     def setArchipelagoAuto(self, _=None):
@@ -2155,32 +2161,54 @@ class LocalToon(DistributedToon.DistributedToon, LocalAvatar.LocalAvatar):
         taskMgr.doMethodLater(0.01, self.doAreaSanityCheck, self.uniqueName('areaSanityCheck'))
 
     def doAreaSanityCheck(self, _=None):
+        if self.__isInRestrictedActivityHoodWithoutAccess():
+            self.areaSanityForceMove(forceMove=True)
+            return
+
         tpsanity = localAvatar.slotData.get('tpsanity')
         if tpsanity == TPSanity.option_keys:
             self.areaSanityForceMove()
 
-    def areaSanityForceMove(self):
+    def __isInRestrictedActivityHoodWithoutAccess(self):
+        zoneId = self.getZoneId()
+        if zoneId is None:
+            return False
+
+        hoodId = ZoneUtil.getHoodId(zoneId)
+        if hoodId not in (ToontownGlobals.GoofySpeedway, ToontownGlobals.OutdoorZone):
+            return False
+
+        accessItem = hood_to_tp_item_name(hoodId)
+        return accessItem is not None and ITEM_NAME_TO_ID[accessItem.value] not in self.receivedItemIDs
+
+    def areaSanityForceMove(self, forceMove=False):
         # Ignore if we're in TTC
         if self.getZoneId() == ToontownGlobals.ToontownCentral:
             return
 
         # Huge TPSanity barrier!
-        tpsanity = self.slotData.get('tpsanity')
-        if tpsanity != TPSanity.option_keys:
-            return
-        else:
+        if not forceMove:
+            tpsanity = self.slotData.get('tpsanity')
+            if tpsanity != TPSanity.option_keys:
+                return
+
             tp_itemname = hood_to_tp_item_name(self.getZoneId())
             if not tp_itemname:
                 return
-            else:
-                item_id = ITEM_NAME_TO_ID[tp_itemname.value]
-                if item_id in self.receivedItemIDs:
-                    return
+            item_id = ITEM_NAME_TO_ID[tp_itemname.value]
+            if item_id in self.receivedItemIDs:
+                return
 
         # OK, try to move them now
-        place = self.cr.playGame.getPlace()
-        print(place.fsm.hasStateNamed('DFA'), place.fsm.getCurrentState().getName())
-        if place and place.fsm.hasStateNamed('DFA') and place.fsm.getCurrentState().getName() == 'walk':
+        playGame = getattr(self.cr, 'playGame', None)
+        place = playGame.getPlace() if playGame else None
+        if place is None or not hasattr(place, 'fsm'):
+            # Slot data can arrive before the reconnect has created its place.
+            # enterPlaceWalk will run this check again once it is ready.
+            return
+
+        currentState = place.fsm.getCurrentState()
+        if place.fsm.hasStateNamed('DFA') and currentState is not None and currentState.getName() == 'walk':
             self.doTeleport('TTC')
             self.startAreaSanityCheck()
 

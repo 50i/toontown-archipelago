@@ -311,11 +311,14 @@ class DistributedRace(DistributedObject.DistributedObject):
             self.kartCleanup()
             self.doneBarrier('waitingForExit')
             self.sendUpdate('racerLeft', [localAvatar.doId])
+            returnHood = getattr(localAvatar, 'activityTrapReturnHood', localAvatar.lastHood)
+            if hasattr(localAvatar, 'activityTrapReturnHood'):
+                del localAvatar.activityTrapReturnHood
             out = {'loader': 'safeZoneLoader',
              'where': 'playground',
              'how': 'teleportIn',
-             'hoodId': localAvatar.lastHood,
-             'zoneId': localAvatar.lastHood,
+             'hoodId': returnHood,
+             'zoneId': returnHood,
              'shardId': None,
              'avId': -1,
              'reason': reason}

@@ -5222,6 +5222,8 @@ class DistributedToonAI(DistributedPlayerAI.DistributedPlayerAI, DistributedSmoo
             ToontownItemName.EXPOSE_TRAP,
             ToontownItemName.EXPOSE_BEANS_TRAP,
             ToontownItemName.GAG_DISABLE_TRAP,
+            ToontownItemName.RACING_TRAP,
+            ToontownItemName.GOLFING_TRAP,
             ToontownItemName.TRAP_REFLECT,
             ToontownItemName.DAMAGE_15,
             ToontownItemName.DAMAGE_25,

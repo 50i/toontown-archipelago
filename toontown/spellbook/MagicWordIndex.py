@@ -3867,6 +3867,18 @@ class Traps(MagicWord):
         return "Granted AP traps."
 
 
+class Poll(MagicWord):
+    aliases = ['poll']
+    desc = "Starts a Community Poll for testing."
+    execLocation = MagicWordConfig.EXEC_LOC_SERVER
+    accessLevel = 'NO_ACCESS'
+
+    def handleWord(self, invoker, avId, toon, *args):
+        if self.air.archipelagoManager.startCommunityPoll():
+            return "Started a Community Poll."
+        return "A Community Poll is already active or no player Toons are online."
+
+
 # Command that forces your state to the 'Walk' state.
 # Used in rare circumstances where your toon gets softlocked to prevent having to restart the game.
 # Note: This is still a cheat so it should only be used when needed, as there are many scenarios where you

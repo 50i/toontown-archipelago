@@ -158,6 +158,10 @@ class PetsAvailablePoster(QuestsAvailablePoster):
         return util.ap_location_name_to_id(ToontownGlobals.ZONE_TO_ID_TO_CHECK[hood][index])
 
     def update(self, av):
+        if self.hoodId in base.settings.get('useless-pet-shop-hoods'):
+            self.showLocked()
+            return
+
         petsRemaining = 0
         petsPerPlayground = 3
         for pet in range(petsPerPlayground):

@@ -26,7 +26,7 @@ BOUNTY_BOARD_DEPTH = 0.65
 
 # NPC placement is independent of the board; tune these directly.
 BOUNTY_NPC_POS = (134.18, 70.48, 2.53)
-BOUNTY_NPC_H = 231.15
+BOUNTY_NPC_H = 51.15
 
 
 class DistributedAPBountyNPC(DistributedNPCToonBase):

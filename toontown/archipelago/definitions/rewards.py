@@ -1085,6 +1085,76 @@ class GagDisableTrapAward(APReward, TrapReward):
             firer.d_sendArchipelagoMessage("Gag Disable Trap fizzled because the target is on cooldown.")
 
 
+class ActivityTrapAward(APReward, TrapReward):
+    """Base behavior for traps that send an opponent into a solo activity."""
+
+    activity_name = "activity"
+
+    def formatted_header(self) -> str:
+        return global_text_properties.get_raw_formatted_string([
+            MinimalJsonMessagePart(f"{self.activity_name.upper()} TRAP\n", color='salmon'),
+            MinimalJsonMessagePart(f"Sends your opponent to {self.activity_name}!"),
+        ])
+
+    def apply(self, av: "DistributedToonAI", firer: "DistributedToonAI" = None):
+        # Activity loaders cannot safely pull a Toon out of a battle. The trap is
+        # still spent, but neither combatant is changed.
+        if ((firer is not None and firer.getBattleId()) or av.getBattleId()):
+            if firer is not None:
+                firer.d_sendArchipelagoMessage(
+                    f"{self.activity_name.title()} Trap was used during a battle and had no effect."
+                )
+            return
+
+        from toontown.hood import ZoneUtil
+
+        where = ZoneUtil.getWhereName(av.zoneId, True)
+        if where not in ('playground', 'street'):
+            if firer is not None:
+                firer.d_sendArchipelagoMessage(
+                    f"{self.activity_name.title()} Trap fizzled: the target is not in a street or playground."
+                )
+            return
+
+        # Race and golf both return through lastHood. Explicitly refresh it so
+        # a player trapped from a street returns to that street's playground.
+        hoodId = ZoneUtil.getHoodId(av.zoneId)
+        av.setLastHood(hoodId)
+        av.sendUpdate('setLastHood', [hoodId])
+        self._start_activity(av)
+
+    def _start_activity(self, av: "DistributedToonAI"):
+        raise NotImplementedError
+
+
+class RacingTrapAward(ActivityTrapAward):
+    activity_name = "racing"
+
+    def _start_activity(self, av: "DistributedToonAI"):
+        from toontown.racing import RaceGlobals
+
+        raceZone = av.air.raceMgr.createRace(
+            RaceGlobals.RT_Speedway_1,
+            RaceGlobals.Practice,
+            1,
+            [av.doId],
+            circuitLoop=[],
+            circuitPoints={},
+            circuitTimes={},
+        )
+        av.sendUpdate('sendToRaceCourse', [raceZone, RaceGlobals.RT_Speedway_1, av.getLastHood()])
+
+
+class GolfingTrapAward(ActivityTrapAward):
+    activity_name = "golfing"
+
+    def _start_activity(self, av: "DistributedToonAI"):
+        from toontown.golf import GolfManagerAI
+
+        golfZone = GolfManagerAI.GolfManagerAI().readyGolfCourse([av.doId], courseId=0)
+        av.sendUpdate('sendToGolfTrapCourse', [golfZone, av.getLastHood()])
+
+
 class RaidTrapAward(APReward, TrapReward):
     self_target = True
 
@@ -1457,6 +1527,8 @@ ITEM_NAME_TO_AP_REWARD: [str, APReward] = {
     ToontownItemName.EXPOSE_TRAP.value: ExposeTrapAward(),
     ToontownItemName.EXPOSE_BEANS_TRAP.value: ExposeBeansTrapAward(),
     ToontownItemName.GAG_DISABLE_TRAP.value: GagDisableTrapAward(),
+    ToontownItemName.RACING_TRAP.value: RacingTrapAward(),
+    ToontownItemName.GOLFING_TRAP.value: GolfingTrapAward(),
     ToontownItemName.RAID_TRAP.value: RaidTrapAward(),
     ToontownItemName.TRAP_REFLECT.value: TrapReflectAward(),
     ToontownItemName.DAMAGE_15.value: DamageTrapAward(15),

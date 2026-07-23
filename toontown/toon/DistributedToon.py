@@ -2218,6 +2218,99 @@ class DistributedToon(DistributedPlayer.DistributedPlayer, Toon.Toon, Distribute
         base.cr.playGame.getPlace().requestLeave(golfRequest)
         return
 
+    def sendToGolfTrapCourse(self, zoneId, returnHood):
+        """Enter golf through its hood and remember where an activity trap began."""
+        self.activityTrapReturnHood = returnHood
+        self.activityTrapGolfZone = zoneId
+
+        # A newly loaded golf hood starts in its ``start`` state and cannot
+        # transition directly into a course. Enter its playground first, then
+        # queue the course through its normal quiet-zone path.
+        golfRequest = {'loader': 'safeZoneLoader',
+         'where': 'playground',
+         'how': 'teleportIn',
+         'hoodId': ToontownGlobals.GolfZone,
+         'zoneId': ToontownGlobals.GolfZone,
+         'shardId': None,
+         'avId': -1}
+        base.cr.playGame.getPlace().requestLeave(golfRequest)
+        taskMgr.remove(self.uniqueName('activity-trap-golf-start'))
+        taskMgr.add(self._startActivityTrapGolfCourse, self.uniqueName('activity-trap-golf-start'))
+        return
+
+    def _startActivityTrapGolfCourse(self, task):
+        """Wait for Golf Zone's playground before entering the dynamic course."""
+        playGame = base.cr.playGame
+        if playGame.hood is None or playGame.hood.hoodId != ToontownGlobals.GolfZone:
+            return Task.cont
+
+        golfLoader = playGame.hood.loader
+        if not hasattr(golfLoader, 'fsm'):
+            return Task.cont
+        golfState = golfLoader.fsm.getCurrentState()
+        if golfState is None or golfState.getName() != 'playground':
+            return Task.cont
+
+        golfZone = self.activityTrapGolfZone
+        del self.activityTrapGolfZone
+        golfRequest = {'loader': 'golfcourse',
+         'where': 'golfcourse',
+         'how': 'teleportIn',
+         'hoodId': ToontownGlobals.GolfZone,
+         'zoneId': golfZone,
+         'shardId': None,
+         'avId': -1,
+         'courseId': 0}
+        golfLoader.fsm.request('quietZone', [golfRequest])
+        return Task.done
+
+    def sendToRaceCourse(self, zoneId, trackId, returnHood):
+        """Leave the current hood for a server-created race activity."""
+        self.activityTrapReturnHood = returnHood
+        self.activityTrapRace = (zoneId, trackId)
+        raceRequest = {'loader': 'safeZoneLoader',
+         'where': 'playground',
+         'how': 'teleportIn',
+         'hoodId': ToontownGlobals.GoofySpeedway,
+         'zoneId': ToontownGlobals.GoofySpeedway,
+         'shardId': None,
+         'avId': -1}
+        # Request the destination through PlayGame itself. A local place can
+        # preserve its racetrack loader while leaving another hood, which
+        # makes the newly created Goofy Speedway hood try to start directly
+        # in a state it does not own.
+        base.cr.playGame.fsm.request('quietZone', [raceRequest])
+        taskMgr.remove(self.uniqueName('activity-trap-race-start'))
+        taskMgr.add(self._startActivityTrapRace, self.uniqueName('activity-trap-race-start'))
+        return
+
+    def _startActivityTrapRace(self, task):
+        """Wait for Goofy Speedway's playground before entering the race."""
+        playGame = base.cr.playGame
+        if playGame.hood is None or playGame.hood.hoodId != ToontownGlobals.GoofySpeedway:
+            return Task.cont
+
+        raceLoader = playGame.hood.loader
+        if not hasattr(raceLoader, 'fsm'):
+            return Task.cont
+        raceState = raceLoader.fsm.getCurrentState()
+        if raceState is None or raceState.getName() != 'playground':
+            return Task.cont
+
+        raceZone, trackId = self.activityTrapRace
+        del self.activityTrapRace
+        raceRequest = {'loader': 'racetrack',
+         'where': 'racetrack',
+         'how': 'teleportIn',
+         'hoodId': ToontownGlobals.GoofySpeedway,
+         'zoneId': raceZone,
+         'trackId': trackId,
+         'shardId': None,
+         'avId': -1,
+         'reason': 0}
+        raceLoader.fsm.request('quietZone', [raceRequest])
+        return Task.done
+
     def getGolfTrophies(self):
         return self.golfTrophies
 

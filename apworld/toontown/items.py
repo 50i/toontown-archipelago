@@ -150,6 +150,8 @@ class ToontownItemName(enum.Enum):
     EXPOSE_BEANS_TRAP = "Expose Jellybeans Trap"
     TRAP_REFLECT = "Trap Reflect"
     GAG_DISABLE_TRAP = "Gag Disable Trap"
+    RACING_TRAP = "Racing Trap"
+    GOLFING_TRAP = "Golfing Trap"
     RAID_TRAP = "RAID!"
     DAMAGE_15 = "15% Damage Trap"
     DAMAGE_25 = "25% Damage Trap"
@@ -314,6 +316,9 @@ ITEM_DEFINITIONS: List[ToontownItemDefinition] = [
     ToontownItemDefinition(ToontownItemName.EXPOSE_BEANS_TRAP,    ItemClassification.trap),
     ToontownItemDefinition(ToontownItemName.GAG_DISABLE_TRAP,     ItemClassification.trap),
     ToontownItemDefinition(ToontownItemName.RAID_TRAP,            ItemClassification.trap),
+    # Keep new definitions at the end so existing Archipelago item IDs remain stable.
+    ToontownItemDefinition(ToontownItemName.RACING_TRAP,          ItemClassification.trap),
+    ToontownItemDefinition(ToontownItemName.GOLFING_TRAP,         ItemClassification.trap),
     # endregion
 ]
 
@@ -481,6 +486,8 @@ def get_item_groups():
         ToontownItemName.EXPOSE_TRAP,
         ToontownItemName.EXPOSE_BEANS_TRAP,
         ToontownItemName.GAG_DISABLE_TRAP,
+        ToontownItemName.RACING_TRAP,
+        ToontownItemName.GOLFING_TRAP,
         ToontownItemName.DAMAGE_15,
         ToontownItemName.DAMAGE_25,
     )
