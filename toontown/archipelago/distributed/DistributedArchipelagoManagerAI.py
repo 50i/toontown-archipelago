@@ -14,6 +14,7 @@ from toontown.toon.DistributedToonAI import DistributedToonAI
 from toontown.coghq.CogDisguiseGlobals import PartsPerSuitBitmasks
 from apworld.toontown import FISHING_LICENSES, ITEM_DEFINITIONS, ITEM_NAME_TO_ID, ToontownItemName, get_item_def_from_id
 from apworld.toontown.fish import FishProgression
+from apworld.toontown.locations import LOCATION_ID_TO_NAME
 
 
 class DistributedArchipelagoManagerAI(DistributedObjectAI):
@@ -446,7 +447,8 @@ class DistributedArchipelagoManagerAI(DistributedObjectAI):
 
         candidateIds = sorted(set(candidateIds))
         self.__raidTrapLocation = random.Random(f"raid-trap:{seedName}").choice(candidateIds)
-        self.notify.warning(f"[AP RAID] RAID! trap location selected: {self.__raidTrapLocation}")
+        locationName = LOCATION_ID_TO_NAME.get(self.__raidTrapLocation, "Unknown Location")
+        self.notify.warning(f"[AP RAID] RAID! trap location selected: {locationName} ({self.__raidTrapLocation})")
         return self.__raidTrapLocation
 
     def maybeGrantRaidTrap(self, toon, checkedLocations):
@@ -460,7 +462,8 @@ class DistributedArchipelagoManagerAI(DistributedObjectAI):
         rewardDefinition = get_ap_reward_from_id(itemId)
         toon.queueAPReward(EarnedAPReward(toon, rewardDefinition, rewardIndex, itemId, "RAID!", True))
         self.__raidTrapClaimedBy = toon.doId
-        self.notify.warning(f"[AP RAID] {toon.getName()} claimed RAID! at location {location}")
+        locationName = LOCATION_ID_TO_NAME.get(location, "Unknown Location")
+        self.notify.warning(f"[AP RAID] {toon.getName()} claimed RAID! at location {locationName} ({location})")
         toon.d_sendArchipelagoMessage("RAID! trap found.")
 
     def requestTrade(self, targetAvId, offerIndex, offerItemId, requestedIndex, requestedItemId):

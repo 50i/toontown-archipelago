@@ -77,6 +77,7 @@ class Settings:
         'discord-rich-presence': False,
         "color-blind-mode": False,
         "useless-pet-shop-hoods": [],
+        "useless-toonhq-task-hoods": [],
     }
     settingsFile = Path.home() / "Documents" / "Toontown Archipelago" / "settings.json"
 

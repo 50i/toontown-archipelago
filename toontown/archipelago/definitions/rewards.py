@@ -730,6 +730,37 @@ class CogDisguiseReward(APReward):
         return True
 
 
+class CogDisguisePartReward(CogDisguiseReward):
+
+    def formatted_header(self) -> str:
+        dept = self.ENUM_TO_NAME[self.dept]
+        return global_text_properties.get_raw_formatted_string([
+            MinimalJsonMessagePart("You were given\na "),
+            MinimalJsonMessagePart(f"{dept} Suit Part", color='plum'),
+            MinimalJsonMessagePart("!"),
+        ])
+
+    def apply(self, av: "DistributedToonAI", firer: "DistributedToonAI" = None):
+        parts = av.getCogParts()
+        full_mask = PartsPerSuitBitmasks[self.dept]
+        missing = full_mask & ~parts[self.dept]
+        if not missing:
+            return
+        next_part = missing & -missing
+        parts[self.dept] |= next_part
+        av.b_setCogParts(parts)
+
+    def revoke(self, av: "DistributedToonAI", item_id: int = None):
+        parts = av.getCogParts()
+        present = parts[self.dept] & PartsPerSuitBitmasks[self.dept]
+        if not present:
+            return False
+        remove_part = 1 << (present.bit_length() - 1)
+        parts[self.dept] &= ~remove_part
+        av.b_setCogParts(parts)
+        return True
+
+
 class JellybeanReward(APReward):
 
     def __init__(self, amount: int):
@@ -1089,6 +1120,7 @@ class ActivityTrapAward(APReward, TrapReward):
     """Base behavior for traps that send an opponent into a solo activity."""
 
     activity_name = "activity"
+    allowed_where_names = ('playground', 'street', 'cogHQExterior', 'cogHQLobby', 'factoryExterior')
 
     def formatted_header(self) -> str:
         return global_text_properties.get_raw_formatted_string([
@@ -1109,10 +1141,10 @@ class ActivityTrapAward(APReward, TrapReward):
         from toontown.hood import ZoneUtil
 
         where = ZoneUtil.getWhereName(av.zoneId, True)
-        if where not in ('playground', 'street'):
+        if where not in self.allowed_where_names:
             if firer is not None:
                 firer.d_sendArchipelagoMessage(
-                    f"{self.activity_name.title()} Trap fizzled: the target is not in a street or playground."
+                    f"{self.activity_name.title()} Trap fizzled: the target is not in a street, playground, or Cog HQ."
                 )
             return
 
@@ -1501,6 +1533,10 @@ ITEM_NAME_TO_AP_REWARD: [str, APReward] = {
     ToontownItemName.CASHBOT_DISGUISE.value: CogDisguiseReward(CogDisguiseReward.CASHBOT),
     ToontownItemName.LAWBOT_DISGUISE.value: CogDisguiseReward(CogDisguiseReward.LAWBOT),
     ToontownItemName.BOSSBOT_DISGUISE.value: CogDisguiseReward(CogDisguiseReward.BOSSBOT),
+    ToontownItemName.SELLBOT_SUIT_PART.value: CogDisguisePartReward(CogDisguiseReward.SELLBOT),
+    ToontownItemName.CASHBOT_SUIT_PART.value: CogDisguisePartReward(CogDisguiseReward.CASHBOT),
+    ToontownItemName.LAWBOT_SUIT_PART.value: CogDisguisePartReward(CogDisguiseReward.LAWBOT),
+    ToontownItemName.BOSSBOT_SUIT_PART.value: CogDisguisePartReward(CogDisguiseReward.BOSSBOT),
     ToontownItemName.MONEY_150.value: JellybeanReward(150),
     ToontownItemName.MONEY_400.value: JellybeanReward(400),
     ToontownItemName.MONEY_700.value: JellybeanReward(700),

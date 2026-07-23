@@ -6,8 +6,10 @@ import random
 from direct.task.Task import Task
 from direct.distributed import DistributedObject
 from direct.directnotify import DirectNotifyGlobal
+from direct.gui.DirectGui import DirectButton
 from . import ToonInteriorColors
 from toontown.toonbase import TTLocalizer
+from toontown.hood import ZoneUtil
 
 class DistributedHQInterior(DistributedObject.DistributedObject):
 
@@ -19,6 +21,7 @@ class DistributedHQInterior(DistributedObject.DistributedObject):
         self.leaderScores = []
         self.numLeaders = 10
         self.tutorial = 0
+        self.uselessTaskButton = None
 
     def generate(self):
         DistributedObject.DistributedObject.generate(self)
@@ -35,6 +38,7 @@ class DistributedHQInterior(DistributedObject.DistributedObject):
         self.interior.flattenMedium()
         emptyBoard = self.interior.find('**/empty_board')
         self.leaderBoard.reparentTo(emptyBoard.getChild(0))
+        self._createUselessTaskButton()
 
     def setTutorial(self, flag):
         if self.tutorial == flag:
@@ -51,6 +55,50 @@ class DistributedHQInterior(DistributedObject.DistributedObject):
     def setZoneIdAndBlock(self, zoneId, block):
         self.zoneId = zoneId
         self.block = block
+
+    def _createUselessTaskButton(self):
+        """Offer a local tracker control for ToonHQs with no useful tasks."""
+        self.uselessTaskHoodId = ZoneUtil.getCanonicalHoodId(self.zoneId)
+        isMarkedUseless = self.uselessTaskHoodId in base.settings.get('useless-toonhq-task-hoods')
+        self.uselessTaskButton = DirectButton(
+            parent=base.a2dBottomLeft,
+            relief='raised',
+            frameColor=(0.35, 0.55, 0.35, 1) if isMarkedUseless else (0.8, 0.25, 0.25, 1),
+            frameSize=(-2.0, 2.0, -0.85, 0.85),
+            scale=0.15,
+            pos=(0.34, 0, 0.48),
+            text='Unmark\nTasks' if isMarkedUseless else 'Mark Tasks\nUseless',
+            text_scale=0.22,
+            text_wordwrap=9,
+            text_align=TextNode.ACenter,
+            command=self.unmarkTasksUseless if isMarkedUseless else self.markTasksUseless,
+        )
+
+    def markTasksUseless(self):
+        markedHoods = list(base.settings.get('useless-toonhq-task-hoods'))
+        if self.uselessTaskHoodId not in markedHoods:
+            markedHoods.append(self.uselessTaskHoodId)
+            base.settings.set('useless-toonhq-task-hoods', sorted(markedHoods))
+            base.settings.write()
+            messenger.send('toonhq-tasks-marked-useless')
+
+        self._refreshUselessTaskButton()
+
+    def unmarkTasksUseless(self):
+        markedHoods = list(base.settings.get('useless-toonhq-task-hoods'))
+        if self.uselessTaskHoodId in markedHoods:
+            markedHoods.remove(self.uselessTaskHoodId)
+            base.settings.set('useless-toonhq-task-hoods', markedHoods)
+            base.settings.write()
+            messenger.send('toonhq-tasks-marked-useless')
+
+        self._refreshUselessTaskButton()
+
+    def _refreshUselessTaskButton(self):
+        if self.uselessTaskButton:
+            self.uselessTaskButton.destroy()
+            self.uselessTaskButton = None
+        self._createUselessTaskButton()
 
     def buildLeaderBoard(self):
         self.leaderBoard = hidden.attachNewNode('leaderBoard')
@@ -164,6 +212,9 @@ class DistributedHQInterior(DistributedObject.DistributedObject):
         del self.randomGenerator
 
     def disable(self):
+        if self.uselessTaskButton:
+            self.uselessTaskButton.destroy()
+            self.uselessTaskButton = None
         self.leaderBoard.removeNode()
         del self.leaderBoard
         self.interior.removeNode()

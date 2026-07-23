@@ -169,6 +169,7 @@ class MapPage(ShtikerPage.ShtikerPage):
         cloudModel.removeNode()
         self.resetFrameSize()
         self.accept('petshop-marked-useless', self.updateTasksAvailableFrames)
+        self.accept('toonhq-tasks-marked-useless', self.updateTasksAvailableFrames)
         return
 
     def showTasksAvailableFrame(self, hood, hoodIndex, pos):
@@ -234,6 +235,8 @@ class MapPage(ShtikerPage.ShtikerPage):
             # Do we not have access to this hood?
             if hoodId in FADoorCodes.PLAYGROUND_ZONES:
                 if FADoorCodes.ZONE_TO_ACCESS_CODE[hoodId] not in base.localAvatar.getAccessKeys():
+                    questPoster.showLocked()
+                elif hoodId in base.settings.get('useless-toonhq-task-hoods'):
                     questPoster.showLocked()
                 else:
                     # Get the reward IDs from this playground

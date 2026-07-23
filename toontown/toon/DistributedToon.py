@@ -2233,7 +2233,7 @@ class DistributedToon(DistributedPlayer.DistributedPlayer, Toon.Toon, Distribute
          'zoneId': ToontownGlobals.GolfZone,
          'shardId': None,
          'avId': -1}
-        base.cr.playGame.getPlace().requestLeave(golfRequest)
+        self._requestActivityTrapLeave(golfRequest)
         taskMgr.remove(self.uniqueName('activity-trap-golf-start'))
         taskMgr.add(self._startActivityTrapGolfCourse, self.uniqueName('activity-trap-golf-start'))
         return
@@ -2275,14 +2275,23 @@ class DistributedToon(DistributedPlayer.DistributedPlayer, Toon.Toon, Distribute
          'zoneId': ToontownGlobals.GoofySpeedway,
          'shardId': None,
          'avId': -1}
-        # Request the destination through PlayGame itself. A local place can
-        # preserve its racetrack loader while leaving another hood, which
-        # makes the newly created Goofy Speedway hood try to start directly
-        # in a state it does not own.
-        base.cr.playGame.fsm.request('quietZone', [raceRequest])
+        self._requestActivityTrapLeave(raceRequest)
         taskMgr.remove(self.uniqueName('activity-trap-race-start'))
         taskMgr.add(self._startActivityTrapRace, self.uniqueName('activity-trap-race-start'))
         return
+
+    def _requestActivityTrapLeave(self, requestStatus):
+        """Leave through PlayGame so traps can interrupt fishing/NPC interactions."""
+        place = base.cr.playGame.getPlace()
+        if place is not None and hasattr(place, 'getState') and hasattr(place, 'setState'):
+            state = place.getState()
+            if state in ('fishing', 'purchase', 'quest', 'stopped'):
+                place.setState('walk')
+
+        # Request the destination through PlayGame itself. Some local place
+        # states cannot transition directly to teleportOut, and a local place
+        # can preserve its current loader while leaving another hood.
+        base.cr.playGame.fsm.request('quietZone', [requestStatus])
 
     def _startActivityTrapRace(self, task):
         """Wait for Goofy Speedway's playground before entering the race."""

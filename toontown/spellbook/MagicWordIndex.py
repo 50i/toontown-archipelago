@@ -12,6 +12,7 @@ from otp.otpbase import OTPLocalizer
 from otp.otpbase import OTPGlobals
 
 from toontown.battle import SuitBattleGlobals
+from toontown.building import FADoorCodes
 from toontown.coghq import CogDisguiseGlobals, CraneLeagueGlobals
 from toontown.coghq.ActivityLog import ActivityLog
 from toontown.coghq.CraneLeagueHeatDisplay import CraneLeagueHeatDisplay
@@ -3865,6 +3866,59 @@ class Traps(MagicWord):
             return "You can only grant AP traps to yourself!"
         toon.giveAllAPTraps()
         return "Granted AP traps."
+
+
+class SuitParts(MagicWord):
+    aliases = ['suitParts']
+    desc = "Grants every Cog Suit part."
+    execLocation = MagicWordConfig.EXEC_LOC_SERVER
+    accessLevel = 'NO_ACCESS'
+
+    def handleWord(self, invoker, avId, toon, *args):
+        if invoker != toon:
+            return "You can only grant suit parts to yourself!"
+        toon.b_setCogParts(list(CogDisguiseGlobals.PartsPerSuitBitmasks))
+        receivedItemIds = [itemId for _rewardIndex, itemId in toon.getReceivedItems()]
+        usedIndexes = {rewardIndex for rewardIndex, _itemId in toon.getReceivedItems()}
+        rewardIndex = 3100000000 + ((int(time.time()) % 1000000) * 1000)
+
+        def addSyntheticReceivedItem(itemName, neededCount=1):
+            itemId = items.ITEM_NAME_TO_ID.get(itemName.value)
+            if itemId is None:
+                return
+            currentCount = receivedItemIds.count(itemId)
+            for _ in range(max(0, neededCount - currentCount)):
+                nonlocal rewardIndex
+                while rewardIndex in usedIndexes:
+                    rewardIndex += 1
+                    if rewardIndex >= 4294967000:
+                        rewardIndex = 3100000000
+                usedIndexes.add(rewardIndex)
+                receivedItemIds.append(itemId)
+                toon.addReceivedItem(rewardIndex, itemId)
+                rewardIndex += 1
+
+        for hqZone in (
+                ToontownGlobals.SellbotHQ,
+                ToontownGlobals.CashbotHQ,
+                ToontownGlobals.LawbotHQ,
+                ToontownGlobals.BossbotHQ):
+            toon.addHoodVisited(hqZone)
+            toon.addTeleportAccess(hqZone)
+            if hqZone in FADoorCodes.ZONE_TO_ACCESS_CODE:
+                toon.addAccessKey(FADoorCodes.ZONE_TO_ACCESS_CODE[hqZone])
+
+        for accessItem in (
+                items.ToontownItemName.SBHQ_ACCESS,
+                items.ToontownItemName.CBHQ_ACCESS,
+                items.ToontownItemName.LBHQ_ACCESS,
+                items.ToontownItemName.BBHQ_ACCESS):
+            addSyntheticReceivedItem(accessItem)
+
+        for partItem, count in items.DISGUISE_PART_COUNTS.items():
+            addSyntheticReceivedItem(partItem, count)
+
+        return "Granted all Cog Suit parts and AP HQ access."
 
 
 class Poll(MagicWord):

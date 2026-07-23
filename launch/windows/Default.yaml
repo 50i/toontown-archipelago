@@ -1,0 +1,486 @@
+# Set your slot name here.
+# When connected, this will also be your Toon name.
+name: Default
+
+Toontown:
+  progression_balancing: 50
+  accessibility: full
+
+  ### Team Settings ###
+
+  # Experimental option that is a workaround for Archipelago Teams.
+  # If you are not admin'ing a race, you should not change this setting.
+  team: 0
+
+  ### Starting Settings ###
+
+  # The starting amount of max Laff Points to have when starting a new game.
+  # Range: 1 to 80
+  starting_laff: 20
+
+  # The max laff you can get from items throughout the run.
+  # Must be above or equal to the starting_laff.
+  # Range: 34 to 150
+  max_laff: 150
+
+  # The base global gag experience multiplier when starting a new game.
+  # This multiplier is globally multiplicative on top of in-game boosts.
+  # Range: 1 to 10
+  base_global_gag_xp: 5
+
+  # Additional global gag experience that can be obtained from items.
+  # Stacks additively onto the base value above.
+  # Must be above or equal to the base_global_gag_xp.
+  # Range: 0 to 30
+  max_global_gag_xp: 30
+
+  # The gags to have when starting a new game. using "randomized" instead of a gag will replace with a random extra gag.
+  # you cannot start with gags above level 1, duplicate values other than "randomized" will be ignored.
+  # 
+  # valid keys: ["randomized", "toonup", "trap", "lure", "sound", "throw", "squirt", "drop"]
+  # ex. ["toonup", "sound"] will start you with toonup and sound as starting tracks
+  # ex. ["sound"] will start you with only sound as a starting track
+  # Note: You can add "wild" to this list in order to remove any sanity/logic behind randomized gag choices (being able to do damage)
+  # (cont.) This will allow for gag combinations such as ["trap", "toonup"] to be possible with randomization
+  # ex. ['wild', 'randomized', 'randomized'] will roll two random tracks with no consideration
+  # An empty list will start you with no gag tracks
+  starting_gags: ['randomized', 'randomized']
+
+  # Choose an offensive gag track to not receive during the seed.
+  # none (default): Receive all Gag tracks
+  # trap: Never receive Trap Gags
+  # sound: Never receive Sound Gags
+  # throw: Never receive Throw Gags
+  # squirt: Never receive Squirt Gags
+  # drop: Never receive Drop Gags
+  # randomized: Pick a random Gag track to not receive during the seed
+  # randomsingle: Pick a random single target Gag track to not receive during the seed
+  omit_gag: 'none'
+
+  # The percentage of damage the Toon has at the start of a run.
+  # 50 -> 50%/Half damage, 200 -> 200%/2x damage, etc.
+  # Range: 50 to 200
+  start_damage_multiplier: 100
+
+  # The percentage of damage the Toon can have at max.
+  # 50 -> 50%/Half damage, 200 -> 200%/2x damage, etc.
+  # Range: 70 to 200
+  max_damage_multiplier: 100
+
+  # The percentage multiplier that will be applied to the exp overflow rate.
+  # 50 -> 50%/Half overflow rate, 200 -> 200%/2x overflow rate, etc.
+  # Range: 25 to 300
+  overflow_mod: 100
+
+  # Toggle the ability for Cogs to deal slightly randomized damage (0.9x-1.3x).
+  cog_dmg_rando: 'false'
+
+  # The starting amount of jellybeans to have when starting a new game.
+  # Range: 0 to 1000
+  starting_money: 1000
+
+  # The starting amount of tasks you can carry when starting a new game.
+  # Range: 1 to 6
+  starting_task_capacity: 2
+
+  # The max amount of tasks you can carry in a run.
+  # Range: 1 to 6
+  max_task_capacity: 6
+  
+  ### Boss Settings ###
+
+  # How many checks you will receive from a cog boss upon completion.
+  # Range: 0 to 5
+  checks_per_boss: 4
+
+  # Determines how Cog Suit disguises are placed in the item pool.
+  # - full_suits: One item per department unlocks the whole suit.
+  # - suit_parts: Adds individual suit part items instead.
+  cog_suit_item_mode: 'full_suits'
+
+  ### Completion Settings ###
+
+  # Determines the condition required before being able to talk to Flippy to complete the game.
+  # At least one of these should be enabled.
+
+  # valid keys: ["cog-bosses", "bounties", "total-tasks", "hood-tasks", "gag-tracks",
+  #              "fish-species", "laff-o-lympics", "randomized"]
+
+  # "cog-bosses" - Player must defeat enough bosses (determined by cog_bosses_required)
+  # "bounties" - Player must collect enough bounties in their own world (determined by bounties_required, total_bounties)
+  # "total-tasks" - Player must complete enough ToonTasks (determined by total_tasks_required)
+  # "hood-tasks" - Player must complete enough ToonTasks in each Playground (determined by hood_tasks_required)
+  # "gag-tracks" - Player must max enough Gag Tracks (determined by gag_tracks_required)
+  # "fish-species" - Player must catch enough fish species (determined by fish_species_required)
+  # "laff-o-lympics" - Player must reach a certain amount of laff (determined by laff_points_required)
+  #                    NOTE: Replaces ALL Laff Boosts with +1 Laff Boosts
+  # "randomized" - Will choose a random not-yet chosen goal as one of your goals.
+  #                NOTE: Can be input into the below list multiple times for multiple random goals
+  # Examples: ["cog-bosses", "hood-tasks"] | ["randomized", "randomized", "gag-tracks"]
+  win_condition: ["cog-bosses"]
+
+  # Allows for the selected win conditions to be omitted when randomizing a win condition.
+  # Example: Adding "bounties" to this option will ensure bounties can't be rolled when you roll for a randomized win condition
+
+  # valid keys: [ "cog-bosses", "bounties", "total-tasks", "hood-tasks", "gag-tracks",
+  #               "fish-species", "laff-o-lympics" ]
+
+  # Examples: [ "cog-bosses", "hood-tasks" ] | ["gag-tracks"]
+  conditions_omitted_when_randomized: []
+
+  # How many cog bosses must be defeated before being able to talk to Flippy to complete the game
+  # Unused if win_condition is not cog-bosses
+  # Range: 0 to 4
+  cog_bosses_required: 4
+  
+  # How many total tasks must be finished before being able to talk to Flippy to complete the game.
+  # Unused if win_condition is not total-tasks.
+  # Range: 0 to 72
+  total_tasks_required: 48
+  
+  # How many tasks must be finished in each neighborhood before being able to talk to Flippy to complete the game.
+  # Unused if win_condition is not hood-tasks.
+  # Range: 0 to 12
+  hood_tasks_required: 8
+  
+  # How many gag tracks must be maxxed before being able to talk to Flippy to complete the game
+  # Unused if win_condition is not gag-tracks
+  # Range 0 to 7
+  gag_tracks_required: 5
+
+  # How many fish species must be caught before being able to talk to Flippy to complete the game
+  # Unused if win_condition is not fish-species
+  # Range 0 to 70
+  fish_species_required: 60
+
+  # How many laff points we must have before being able to talk to Flippy to complete the game
+  # Unused if win_condition is not laff-o-lympics
+  # Setting must be below or equal to max_laff setting
+  # Range 0 to 150
+  laff_points_required: 120
+
+  # BOUNTY SETTINGS #
+  # HINT: Put "Bounty" in priority_locations if you want all possible bounty locations to have something important, regardless
+  #       of having bounty or not.
+  # NOTE: Putting individual bounty locations in priority_locations will put bounties on those locations before any else
+
+  # How many bounties we must have before being able to talk to Flippy to complete the game
+  # Unused if win_condition is not bounties
+  # Range 0 to 34
+  bounties_required: 7
+
+  # How many bounties are in the pool.
+  # Unused if win_condition is not bounties
+  # Must be equal to or above bounties_required
+  # Range 1 to 34
+  total_bounties: 15
+
+  # Should bounties be hinted from the beginning of the run?
+  hint_bounties: "false"
+
+  ### Sanity Settings ###
+
+  # Determines how Teleport Access is shuffled in the Item Pool for all Playgrounds/HQs.
+  # - keys: Playgrounds and HQs are locked until their respective Teleport Access is found.
+  # - treasure: All areas are accessible. Teleport Access items are guaranteed to spawn in their area treasure.
+  # - shuffle: All areas are accessible. Teleport Access items are shuffled in the pool.
+  # - none: All areas are accessible. You start with global teleport access.
+  tpsanity: 'keys'
+
+  ### Treasure Settings ###
+
+  # The amount of archipelago treasures that'll have items in each location
+  # Range: 0 to 6
+  treasures_per_location: 4
+
+  ### Knock Knock Settings ###
+
+  # Add joke books to the item pool to lock knock knock jokes behind them
+  # NOTE: If jokes_per_street is set to 0, books will not be added to the pool
+  joke_books: 'true'
+
+  # The amount of knock knock doors that'll have checks on each street
+  # A setting above 0 will add per-playground joke books to the item pool, if enabled
+  # Range: 0 to 10
+  jokes_per_street: 3
+
+  ### Gag Training Settings ###
+
+  # Behavior of how gag experience check locations are handled.
+
+  # unlock: When unlocking a new gag, you get its respective check.
+  # trained: When earning all available experience for a specific gag level, you get its respective check.
+  # disabled: Does not give checks for gags.
+  gag_training_check_behavior: 'trained'
+
+  # Behavior of how gag training frame items are handled.
+
+  # vanilla: unlocks the gag when you get the exp required.
+  # unlock: unlocks the gag immediately, giving you the required exp directly.
+  # trained: maxes your experience in the track immediately, effectively disabling exp entirely until overcapped.
+  gag_frame_item_behavior: 'vanilla'
+
+  ### Task Settings ###
+
+  # Determines the amount of tasks per playground that are in logic.
+  # Range: 0 to 12
+  logical_tasks_per_playground: 12
+
+  # Determines what the starting playground is for quests (includes TP access)
+  # - ttc: start with TTC access
+  # - dd: start with DD access
+  # - dg: start with DG access
+  # - mml: start with MML access
+  # - tb: start with TB access
+  # - ddl: start with DDL access
+  # - randomized: start with a randomized task access
+  starting_task_playground: 'randomized'
+
+  ### Cog Gallery Settings ###
+
+  # Enable to have Cog Gallery Maxed checks include progression items.
+  # Otherwise, they will just contain filler items (EXP bundles, rewards, etc).
+  logical_maxed_cog_gallery: 'true'
+
+  # The amount of Cogs required to reach its maxed Cog Gallery.
+  # Range: 1 to 10
+  maxed_cog_gallery_quota: 1
+
+  ### Facility Settings ###
+
+  # Determines how facilities are locked within a run.
+  # - keys: Default, each facility has its own key.
+  # - access: Adds a second area access key for each cog HQ to the pool that unlocks all facilities within.
+  # - unlocked: Facilities are unlocked from the start of the run.
+  facility_locking: 'keys'
+
+  # Will allow for maze minigames to sometimes replace the mole stomp minigame in Bossbot HQ's facilities.
+  # All toons entering the facility must have this setting enabled for it to take effect.
+  # NOTE: Each floor with a maze adds an additional cog battle to that floor, slightly increasing difficulty.
+  want_cgc_mazes: 'true'
+
+  ### Fish Settings ###
+
+  # Determines where fish can spawn.
+  # - playgrounds: Fish spawn in their vanilla locations. Street-exclusive fish can be found anywhere in their playgrounds.
+  # - vanilla: Fish spawn in their vanilla locations. Street-exclusive fish remain in their vanilla locations.
+  # - global: Fish can spawn anywhere.
+  fish_locations: 'playgrounds'
+
+  # Determines the amount of items that can be found from fishing.
+  # - all_species: All 70 species will have an item.
+  # - all_gallery_and_genus: Every 10 species and unique genus will have an item.
+  # - all_gallery: Every 10 species will have an item.
+  # - everything: Every 10 species, every species, and every genus will have an item.
+  # - none: There are no items in fishing.
+  fish_checks: 'all_species'
+
+  # Determines the progression for fishing.
+  # - licenses_and_rods: Both 'licenses' and 'rods' progression are active.
+  # - licenses: Playground fishing is restricted until their respective Fishing License is obtained. The player starts with a Gold Rod.
+  # - rods: Progressive fishing rod items are added to the pool.
+  # - none: All fishing areas are available. The player starts with a Gold Rod.
+  fish_progression: 'licenses_and_rods'
+
+  # The amount of pity (% chance of a guarantee) gained towards a new species per catch.
+  # Range: 0 to 100
+  fish_pity: 25
+
+  ### Data Sync Settings ###
+
+  # Enable to sync Jellybeans between toons on the same slot.
+  # Even if you aren't using multiple toons,
+  # leaving this on will retain your jellybeans if you need to make a new toon to reconnect.
+  # If this is 'false', the data will still be sent, but your toon will not sync with it.
+  slot_sync_jellybeans: 'true'
+
+  # Enable to sync Gag Experience between toons on the same slot.
+  # Even if you aren't using multiple toons,
+  # leaving this on will retain your gag experience if you need to make a new toon to reconnect.
+  # If this is 'false', the data will still be sent, but your toon will not sync with it.
+  slot_sync_gag_experience: 'true'
+
+  # Controls Display of Pet Shop and Task Rewards, respectively.
+  # - hidden: hides what a multiworld reward will be, instead it'll name the check as the reward.
+  # - owner: hides what the item is, but shows who it's for.
+  # - class: hides what the item is, but shows who it's for, and what classification it has.
+  # - shown: (default) Tells you what the reward will be when you're looking at the check.
+  # - auto_hint: As shown, but also sends a hint out to the multiworld when you would be shown the reward.
+  pet_shop_display: 'shown'
+  task_reward_display: 'shown'
+
+  # Enable to turn on the pet shop price randomization.
+  # Logic accounts for the random price range if enabled.
+  random_prices: 'true'
+
+  ### Activity Settings ###
+
+  # Determines if racing locations are enabled
+  # Also adds "Go-Kart" to the item pool.
+  racing_logic: 'false'
+
+  # Determines if mini golf locations are enabled
+  # Also adds "Golf Putter" to the item pool.
+  minigolf_logic: 'true'
+
+  ### Seed Generation Settings ###
+
+  # Type of seeding to use when RNG checks happen in game.
+  # global: RNG elements are determined solely by the AP seed
+  # slot_name: RNG elements are determined by AP seed and Slot Name
+  # unique: RNG elements are determined by AP seed and internal toon ID
+  # wild: RNG elements are completely random and will shuffle upon relogging
+  seed_generation_type: 'unique'
+
+  ### Junk Settings ###
+
+  # Weights for all of the various junk (0-100).
+  # At least 1 junk must have a value greater than 0.
+  bean_weight: 100
+  exp_weight: 100
+  sos_weight: 60
+  unite_weight: 60
+  fire_weight: 60
+  summon_weight: 50
+  heal_weight: 75
+  fish_weight: 65
+
+  ### Trap Settings ###
+
+  # Percentage of junk items to be replaced with traps
+  trap_percent: 20
+
+  # Weights for all of the various traps (0-100).
+  # At least 1 trap must have a value of >0 if trap_percent is >=1.
+  uber_trap_weight: 80
+  drip_trap_weight: 50
+  bean_tax_weight: 42
+  gag_shuffle_weight: 80
+  damage_trap_weight: 80
+
+  ### General Gameplay Settings ###
+
+  # Enable/disable the DeathLink mechanic.
+  # When you go sad in game, other players with this setting enabled for their game will also die.
+  # If another player in your game with this setting enabled dies for whatever reason, you will be affected based on setting.
+  # "full": You die when someone else dies, simple.
+  # "drain": Laff drains over time from your current amount to 0, potentially recoverable.
+  # "one": Laff is set to 1 when someone else dies, potentially recoverable.
+  # "off": (default) Deathlink is disabled.
+  death_link: 'off'
+
+  # Enable/disable the RingLink mechanic.
+  # When you gain or lose money in game, other players with this setting enabled have their currencies changed at a 10% rate.
+  # If another player gains or loses money, you will also gain or lose that money.
+  ring_link: 'false'
+
+  ### Archipelago Extra Settings ###
+
+  ## ITEM GROUPS ##
+  # You can use these rather than the individual items for the following cases: #
+  # Cog Disguises - All Cog Boss disguises
+  # Facility Keys - All facility keys
+  # Access Keys - All Playground/Cog HQ access keys
+  # Gag Training Frames - All gag frames
+  # Gag Capacity Increase - All gag pouch increases
+  # Gag Training Boosts - All gag experience multipliers
+  # Gag Upgrades - All organic gag boosts
+  # Damage Boosts - All damage increase items
+  # Fishing Licenses - All fishing access items
+  # Jellybean Capacity - All Jellybean jar upgrades
+  # Side Activity Keys - Golf and Racing access items
+  # Task Capacity - Task capacity upgrades
+  # Laff Boosts - All Laff Boosts
+  # Joke Books - All Joke Books
+  # Reward Bundles - All Boss Reward items
+  # Heals - All healing junk
+  # Jellybeans - All Jellybean junk
+  # Gag Exp Reward - All EXP Bundle junk
+  # Traps - All traps
+
+  # Starting hints for items in your world
+  # Includes Cog Disguises by default
+  start_hints:
+    [Cog Disguises]
+
+  local_items:
+    # Forces these items to be in your own game.
+    [ ]
+
+  non_local_items:
+    # Forces these items to be outside your game.
+    [ ]
+
+  start_inventory_from_pool:
+    # Start with these items and don't place them in the world.
+    # EXAMPLE
+    # {ItemName: quantity, ItemName2: quantity, ...}
+    { }
+
+  start_inventory:
+    # Start with these items, but they will still be in the pool.
+    # EXAMPLE
+    # {ItemName: quantity, ItemName2: quantity, ...}
+    { }
+
+  item_links:
+    # Share part of your item pool with other players.
+    # Every player that wants to link must have a copy of the same link in their own yaml
+    # EXAMPLE
+    # item_links:
+    #   - name: LinkName
+    #     item_pool:
+    #       - List Of
+    #       - Items Shared
+    #     replacement_item: ItemToReplaceLinkedItems
+    [ ]
+
+  ## LOCATION GROUPS ##
+  # You can use these rather than the individual locations for the following cases: #
+  # All Tasks - All ToonTask locations
+  # Fishing - All fishing locations
+  # Pet Shops - All doodle/pet shop locations
+  # Gag Training - All gag training locations
+  # Cog Discovery - All locations for first discovering a new cog for the cog gallery
+  # Max Gallery - All locations for maxing the cog entries in the cog gallery
+  # Cog Gallery - All cog gallery locations
+  # Cog Levels - All locations for unique levels of cogs
+  # Treasures - All AP treasure locations
+  # Boss Clears - All Cog Boss locations
+  # Toontown Central - All locations in TTC
+  # Donald's Dock - All locations in DD
+  # Daisy Gardens - All locations in DG
+  # Minnie's Melodyland - All locations in MML
+  # The Brrrgh - All locations in TB
+  # Donald's Dreamland - All locations in DDL
+  # Goofy Speedway - All locations in GS
+  # Acorn Acres - All locations in AA
+  # Sellbot HQ - All locations in SBHQ
+  # SBHQ Facilities - All locations in Factories
+  # Cashbot HQ - All locations in CBHQ
+  # CBHQ Facilities - All locations in Mints
+  # Lawbot HQ - All locations in LBHQ
+  # LBHQ Facilities - All locations in DA Offices
+  # Bossbot HQ - All locations in BBHQ
+  # BBHQ Facilities - All locations in Cog Golf Courses
+  # Buildings - All Cog Building completion locations
+  # Golfing - All minigolf locations
+  # Racing - All racing locations
+  # Bounty - All bounty locations
+
+  start_location_hints:
+    # Start with these locations hinted in your world.
+    [ ]
+
+  priority_locations:
+    # These locations WILL have a progression item on them.
+    [ ]
+
+  exclude_locations:
+    # These locations CANNOT have a progression item.
+    [ ]
+
+game: Toontown
+requires:
+  version: 0.6.3
+description: 'Default Toontown Template'
