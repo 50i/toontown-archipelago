@@ -37,6 +37,7 @@ class ShtikerBook(DirectFrame, StateData.StateData):
          TTLocalizer.InventoryPageTitle,
          TTLocalizer.QuestPageToonTasks,
          TTLocalizer.BountyPageTitle,
+         TTLocalizer.TrapSkillPageTitle,
          TTLocalizer.SuitPageTitle,
          TTLocalizer.FishPageTitle,
          TTLocalizer.KartPageTitle,
@@ -242,6 +243,12 @@ class ShtikerBook(DirectFrame, StateData.StateData):
             iconGeom = iconModels.find('**/questCard')
             iconScale = 0.9
             iconColor = Vec4(1.0, 0.86, 0.35, 1)
+            iconModels.detachNode()
+        elif pageName == TTLocalizer.TrapSkillPageTitle:
+            iconModels = loader.loadModel('phase_3.5/models/gui/inventory_icons')
+            iconGeom = iconModels.find('**/inventory_tart')
+            iconScale = 7
+            iconColor = Vec4(1.0, 0.86, 0.12, 1)
             iconModels.detachNode()
         elif pageName == TTLocalizer.TrackPageShortTitle:
             iconGeom = iconModels = loader.loadModel('phase_3.5/models/gui/filmstrip')

@@ -85,6 +85,12 @@ class RoomInfoPacket(ClientBoundPacketBase):
             client.av.b_setLastSeed(self.seed_name)
             # When we are given this packet, we should attempt to connect this player to the room with their slot
             client.connect()
+        elif "ToontownVersus" in (self.tags or []):
+            client.av.d_sendArchipelagoMessage("[AP Client Thread] New local versus seed detected; resetting AP toon state.")
+            client.av.d_setSystemMessage(0, "New local versus seed detected; resetting AP toon state.")
+            client.av.newToon()
+            client.av.b_setLastSeed(self.seed_name)
+            client.connect()
         else:
             client.av.d_sendArchipelagoMessage("[AP Client Thread] Attempting to connect to a new seed!")
             client.av.d_setSystemMessage(0, "Attempting to connect to a new seed!")

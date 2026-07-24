@@ -1,3 +1,4 @@
+import ast
 import random
 import time
 from typing import Union, List
@@ -322,6 +323,40 @@ class DistributedArchipelagoManagerAI(DistributedObjectAI):
     def d_broadcastAPReward(self, targetAvId, sourceDisplayName, itemName, fromName):
         self.sendUpdateToAvatarId(targetAvId, 'receiveAPReward', [sourceDisplayName, itemName, fromName])
 
+    def reportMutationResult(self, resultText):
+        try:
+            result = ast.literal_eval(resultText)
+        except (SyntaxError, ValueError):
+            self.notify.warning(f"[AP MUTATE] {resultText}")
+            return
+        if not isinstance(result, dict) or result.get("type") != "ttap_mutation_result":
+            self.notify.warning(f"[AP MUTATE] {resultText}")
+            return
+
+        player = result.get("player", "Unknown")
+        itemName = result.get("item_name", result.get("item_id", "Unknown Item"))
+        action = result.get("action")
+        note = result.get("note", "")
+        if not result.get("ok"):
+            message = result.get("message", "mutation failed")
+            self.notify.warning(f"[AP MUTATE] {player}: {message} for {itemName}. {note}")
+            return
+
+        locationName = result.get("location_name", "Unknown Location")
+        locationId = result.get("location_id", "Unknown ID")
+        if action == "place_item":
+            overwritten = result.get("overwritten_item_name", "Unknown Item")
+            self.notify.warning(
+                f"[AP MUTATE] {player}: {itemName} recovery location is {locationName} ({locationId}); overwrote safe item {overwritten}. {note}"
+            )
+        elif action == "replace_item":
+            replacement = result.get("replacement_item_name", "Unknown Item")
+            self.notify.warning(
+                f"[AP MUTATE] {player}: natural duplicate {itemName} at {locationName} ({locationId}) was replaced with {replacement}. {note}"
+            )
+        else:
+            self.notify.warning(f"[AP MUTATE] {player}: {action} completed for {itemName}. {note}")
+
     """
     Code related to AP trade escrow
     """
@@ -458,9 +493,10 @@ class DistributedArchipelagoManagerAI(DistributedObjectAI):
         if location is None or location not in set(checkedLocations):
             return
         itemId = ITEM_NAME_TO_ID[ToontownItemName.RAID_TRAP.value]
-        rewardIndex = 940000000000 + location
-        rewardDefinition = get_ap_reward_from_id(itemId)
-        toon.queueAPReward(EarnedAPReward(toon, rewardDefinition, rewardIndex, itemId, "RAID!", True))
+        session = self.__getSession(toon.doId)
+        if session is None:
+            return
+        session.grant_item_now(itemId, source_name="RAID!", note=f"RAID! location {location}")
         self.__raidTrapClaimedBy = toon.doId
         locationName = LOCATION_ID_TO_NAME.get(location, "Unknown Location")
         self.notify.warning(f"[AP RAID] {toon.getName()} claimed RAID! at location {locationName} ({location})")
@@ -581,14 +617,10 @@ class DistributedArchipelagoManagerAI(DistributedObjectAI):
         offerReward = get_ap_reward_from_id(offerItemId)
         requestedReward = get_ap_reward_from_id(requestedItemId)
 
-        requesterDebtId = requester.createAPTradeDebt(offerItemId, target.getName(), 0)
-        targetDebtId = target.createAPTradeDebt(requestedItemId, requester.getName(), 0)
         requesterRemoval = self.__removeTradedItemFromOwner(requester, offerReward, offerIndex, offerItemId)
         targetRemoval = self.__removeTradedItemFromOwner(target, requestedReward, requestedIndex, requestedItemId)
 
         if requesterRemoval is None or targetRemoval is None:
-            requester.removeAPTradeDebt(requesterDebtId)
-            target.removeAPTradeDebt(targetDebtId)
             if requesterRemoval is not None:
                 self.__restoreRemovedTradedItem(requester, offerReward, offerIndex, offerItemId, requesterRemoval)
             if targetRemoval is not None:
@@ -601,38 +633,15 @@ class DistributedArchipelagoManagerAI(DistributedObjectAI):
                 self.__sendTradeResult(targetAvId, f"Trade cancelled because {requestedName} could not be removed from you.")
             return
 
-        requesterRecoveryLocation = requesterSession.client.pick_trade_recovery_location()
-        targetRecoveryLocation = targetSession.client.pick_trade_recovery_location()
+        requesterSession.grant_item_now(requestedItemId, source_slot=targetSession.getSlotId(), source_name=target.getName(), note=f"Trade from {target.getName()}")
+        targetSession.grant_item_now(offerItemId, source_slot=requesterSession.getSlotId(), source_name=requester.getName(), note=f"Trade from {requester.getName()}")
+        requesterSession.place_item_in_pool(offerItemId, note=f"Trade recovery: {offerName}")
+        targetSession.place_item_in_pool(requestedItemId, note=f"Trade recovery: {requestedName}")
+        requesterSession.replace_natural_item(requestedItemId, note=f"Trade duplicate replacement: {requestedName}")
+        targetSession.replace_natural_item(offerItemId, note=f"Trade duplicate replacement: {offerName}")
 
-        if requesterRecoveryLocation is None or targetRecoveryLocation is None:
-            requester.removeAPTradeDebt(requesterDebtId)
-            target.removeAPTradeDebt(targetDebtId)
-            self.__restoreRemovedTradedItem(requester, offerReward, offerIndex, offerItemId, requesterRemoval)
-            self.__restoreRemovedTradedItem(target, requestedReward, requestedIndex, requestedItemId, targetRemoval)
-            if requesterRecoveryLocation is None:
-                self.__sendTradeResult(requesterAvId, "Trade cancelled: your offered item has no safe recovery location right now.")
-                self.__sendTradeResult(targetAvId, "Trade cancelled: the item offered to you would softlock the other player.")
-            else:
-                self.__sendTradeResult(requesterAvId, "Trade cancelled: the requested item would softlock the other player.")
-                self.__sendTradeResult(targetAvId, "Trade cancelled: your requested item has no safe recovery location right now.")
-            return
-
-        requester.setAPTradeDebtRecoveryLocation(requesterDebtId, requesterRecoveryLocation)
-        target.setAPTradeDebtRecoveryLocation(targetDebtId, targetRecoveryLocation)
-
-        requesterRecoveryName = requesterSession.client.describe_location(requesterRecoveryLocation)
-        targetRecoveryName = targetSession.client.describe_location(targetRecoveryLocation)
-        self.notify.warning(
-            f"[AP TRADE] {requester.getName()} traded away {offerName}; "
-            f"new recovery location in their seed: {requesterRecoveryName} ({requesterRecoveryLocation})"
-        )
-        self.notify.warning(
-            f"[AP TRADE] {target.getName()} traded away {requestedName}; "
-            f"new recovery location in their seed: {targetRecoveryName} ({targetRecoveryLocation})"
-        )
-
-        self.__grantTradedItem(target, requester, offerItemId)
-        self.__grantTradedItem(requester, target, requestedItemId)
+        self.notify.warning(f"[AP TRADE] {requester.getName()} traded away {offerName}; requested local AP server recovery overlay")
+        self.notify.warning(f"[AP TRADE] {target.getName()} traded away {requestedName}; requested local AP server recovery overlay")
 
         self.__sendTradeResult(
             requesterAvId,

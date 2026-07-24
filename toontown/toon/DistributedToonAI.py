@@ -50,6 +50,9 @@ from ..archipelago.definitions.bounties import (MAX_ACTIVE_BOUNTIES, OBJECTIVE_B
                                                 OBJECTIVE_DEPT_PREFIX, OBJECTIVE_ITEM_PREFIX, get_objective_progress, get_objective_text,
                                                 get_reward_name, is_boss_defeat_record, normalize_bounty)
 from ..archipelago.definitions.rewards import EarnedAPReward, TrapReward, TrapStrengthReward, get_ap_reward_from_id
+from ..archipelago.definitions.trap_skills import (BEAN_TAX_DAMAGE_1, BEAN_TAX_DAMAGE_2, SHIELD_BACKFIRE,
+                                                   SHIELD_BREAKER_2X, SHIELD_DRAIN_TIMER_2X,
+                                                   TRAP_SKILLS, spent_skill_points)
 from ..archipelago.definitions.util import ap_location_name_to_id
 from ..archipelago.util import win_condition
 from ..archipelago.util.HintContainer import HintedItem
@@ -251,6 +254,7 @@ class DistributedToonAI(DistributedPlayerAI.DistributedPlayerAI, DistributedSmoo
         self.trapReflectCharges = 0
         self.trapStrengthPercent = 0
         self.disabledGagTrack = 255
+        self.disabledGagTracks = []
         self.disabledGagTrackUntil = 0
         self.gagDisableTrapCooldownUntil = 0
         self.gagDisableInventorySnapshot = None
@@ -261,6 +265,8 @@ class DistributedToonAI(DistributedPlayerAI.DistributedPlayerAI, DistributedSmoo
         self.apRewardQueue: DistributedToonRewardQueue = DistributedToonRewardQueue(self)
         self.apMessageQueue: DistributedToonAPMessageQueue = DistributedToonAPMessageQueue(self)
         self.heldTraps: List[EarnedAPReward] = []  # Trap-type rewards held to be fired at a chosen target later
+        self.trapSkillPoints = 0
+        self.trapSkills = []
         self.lastTrapUseTime = 0
         self.deathReason: DeathReason = DeathReason.UNKNOWN
         self.slotData = {}  # set in connected_packet.py
@@ -4740,11 +4746,15 @@ class DistributedToonAI(DistributedPlayerAI.DistributedPlayerAI, DistributedSmoo
 
     def _completeAPBounty(self, bounty):
         rewardIndex, _dept, _required, _progress, itemId = normalize_bounty(bounty)
-        rewardDefinition = get_ap_reward_from_id(itemId)
-        rewardIndex = self._nextAPBountyRewardIndex(rewardIndex)
-        self.queueAPReward(EarnedAPReward(self, rewardDefinition, rewardIndex, itemId, "Bounty Board", True))
-        self.addReceivedItem(rewardIndex, itemId)
-        print(f"[AP BOUNTY] {self.getName()} completed bounty; reward {get_reward_name(itemId)} inserted at Bounty Board ({rewardIndex})")
+        if self.archipelago_session:
+            self.archipelago_session.grant_item_now(itemId, source_name="Bounty Board", note="Bounty Board")
+            self.archipelago_session.replace_natural_item(itemId, note="Bounty Board duplicate replacement")
+        else:
+            rewardDefinition = get_ap_reward_from_id(itemId)
+            rewardIndex = self._nextAPBountyRewardIndex(rewardIndex)
+            self.queueAPReward(EarnedAPReward(self, rewardDefinition, rewardIndex, itemId, "Bounty Board", True))
+            self.addReceivedItem(rewardIndex, itemId)
+        print(f"[AP BOUNTY] {self.getName()} completed bounty; reward {get_reward_name(itemId)} requested through local AP server")
         self.d_sendArchipelagoMessage("Bounty complete! Reward: %s." % get_reward_name(itemId))
 
     def _nextAPBountyRewardIndex(self, bountyId):
@@ -4881,11 +4891,9 @@ class DistributedToonAI(DistributedPlayerAI.DistributedPlayerAI, DistributedSmoo
 
     # Sent by client to request hint points from the arch session
     def requestHintPoints(self):
-        hintPoints = self.hintPoints
-        # This avoids a server crash if for whatever reason points become negative (usually when settings are changed)
-        if hintPoints < 0:
-            hintPoints = 0
-        self.sendUpdate('hintPointResp', [hintPoints, self.hintCostPercentage * self.totalChecks // 100])
+        self.hintPoints = 999
+        self.hintCostPercentage = 0
+        self.sendUpdate('hintPointResp', [self.hintPoints, 0])
 
     def requestSetBattleSpeed(self, speed):
         self.b_setBattleSpeed(speed)
@@ -5029,6 +5037,9 @@ class DistributedToonAI(DistributedPlayerAI.DistributedPlayerAI, DistributedSmoo
         self.b_setAPTradeDebts([])
         self.b_setAPBounties([])
         self.b_setAccessKeys([])
+        self.b_setHeldTraps([])
+        self.b_setTrapSkillPoints(0)
+        self.b_setTrapSkills([])
 
         # Regenerate the toon's UUID used for archipelago connections.
         self.regenerateUUID()
@@ -5110,6 +5121,131 @@ class DistributedToonAI(DistributedPlayerAI.DistributedPlayerAI, DistributedSmoo
         summary = self._serializeHeldTraps()
         self.sendUpdate('setHeldTraps', [summary])
 
+    def setTrapSkillPoints(self, points):
+        self.trapSkillPoints = max(0, int(points))
+
+    def getTrapSkillPoints(self):
+        return int(getattr(self, 'trapSkillPoints', 0))
+
+    def d_setTrapSkillPoints(self):
+        self.sendUpdate('setTrapSkillPoints', [self.getTrapSkillPoints()])
+
+    def b_setTrapSkillPoints(self, points):
+        self.setTrapSkillPoints(points)
+        self.d_setTrapSkillPoints()
+
+    def setTrapSkills(self, skills):
+        self.trapSkills = sorted({int(skill) for skill in skills if int(skill) in TRAP_SKILLS})
+
+    def getTrapSkills(self):
+        return list(getattr(self, 'trapSkills', []))
+
+    def d_setTrapSkills(self):
+        self.sendUpdate('setTrapSkills', [self.getTrapSkills()])
+
+    def b_setTrapSkills(self, skills):
+        self.setTrapSkills(skills)
+        self.d_setTrapSkills()
+
+    def addTrapSkillPoint(self, amount=1):
+        self.b_setTrapSkillPoints(self.getTrapSkillPoints() + int(amount))
+
+    def hasTrapSkill(self, skillId):
+        return int(skillId) in set(self.getTrapSkills())
+
+    def getAvailableTrapSkillPoints(self):
+        return max(0, self.getTrapSkillPoints() - spent_skill_points(self.getTrapSkills()))
+
+    def unlockTrapSkill(self, skillId):
+        if not self.isPlayerControlled():
+            return
+        skillId = int(skillId)
+        skill = TRAP_SKILLS.get(skillId)
+        if skill is None:
+            self.d_sendArchipelagoMessage("That trap skill does not exist.")
+            return
+        current = set(self.getTrapSkills())
+        if skillId in current:
+            self.d_sendArchipelagoMessage("You already unlocked that trap skill.")
+            return
+        if any(required not in current for required in skill.requires):
+            self.d_sendArchipelagoMessage("Unlock the previous trap skill first.")
+            return
+        if any(locked in current for locked in skill.locks):
+            self.d_sendArchipelagoMessage("That branch is locked for this seed.")
+            return
+        if self.getAvailableTrapSkillPoints() < skill.cost:
+            self.d_sendArchipelagoMessage(f"You need {skill.cost} Blue Glue Sticks for {skill.name}.")
+            return
+        current.add(skillId)
+        self.b_setTrapSkills(current)
+        if skill.trap_item_ids:
+            placed = 0
+            if self.archipelago_session:
+                for trapItemId in skill.trap_item_ids:
+                    copies = self._getTrapSkillPoolCopies(trapItemId)
+                    for _ in range(copies):
+                        if self.archipelago_session.place_item_in_pool(
+                                trapItemId,
+                                note=f"Trap skill unlock: {skill.name}",
+                        ):
+                            placed += 1
+            if placed:
+                noun = "trap" if placed == 1 else "traps"
+                self.d_sendArchipelagoMessage(f"Unlocked trap skill: {skill.name}. {placed} {noun} added to your AP pool.")
+            else:
+                self.d_sendArchipelagoMessage(f"Unlocked trap skill: {skill.name}. Connect to AP to add its trap to your pool.")
+        else:
+            self.d_sendArchipelagoMessage(f"Unlocked trap skill: {skill.name}.")
+
+    def _getTrapSkillPoolCopies(self, itemId: int) -> int:
+        from apworld.toontown import ITEM_NAME_TO_ID, ToontownItemName
+
+        def item(name):
+            return ITEM_NAME_TO_ID.get(name.value)
+
+        expose = float(self.slotData.get("expose_weight", 25))
+        uber = float(self.slotData.get("uber_trap_weight", 25))
+        drip = float(self.slotData.get("drip_trap_weight", 25))
+        bean = float(self.slotData.get("bean_tax_weight", 25))
+        shuffle = float(self.slotData.get("gag_shuffle_weight", 25))
+        damage = float(self.slotData.get("damage_trap_weight", 25))
+        oldTotalWeight = (
+            (expose * 0.8) + (uber * 0.7) + (drip * 0.8) + (shuffle * 0.75) +
+            (shuffle * 0.55) + 35 + 20 + 20 + (damage * 0.45) + (damage * 0.25) +
+            bean
+        )
+        weights = {
+            item(ToontownItemName.BEAN_TAX_TRAP_500): bean,
+            item(ToontownItemName.BEAN_TAX_TRAP_750): bean,
+            item(ToontownItemName.BEAN_TAX_TRAP_1000): bean,
+            item(ToontownItemName.BEAN_TAX_TRAP_1250): bean,
+            item(ToontownItemName.EXPOSE_BEANS_TRAP): expose * 0.8,
+            item(ToontownItemName.EXPOSE_TRAP): expose * 0.8,
+            item(ToontownItemName.TRAP_REFLECT): 35,
+            item(ToontownItemName.DRIP_TRAP): drip * 0.8,
+            item(ToontownItemName.SHIELD_BREAKER_TRAP): drip * 0.8,
+            item(ToontownItemName.CASHBOT_UBER_TRAP): uber * 0.7,
+            item(ToontownItemName.UBER_TRAP): uber * 0.7,
+            item(ToontownItemName.FOUR_GAG_UBER_TRAP): uber * 0.7,
+            item(ToontownItemName.THREE_GAG_UBER_TRAP): uber * 0.7,
+            item(ToontownItemName.DAMAGE_10): damage * 0.45,
+            item(ToontownItemName.DAMAGE_15): damage * 0.45,
+            item(ToontownItemName.DAMAGE_25): damage * 0.25,
+            item(ToontownItemName.GAG_DISABLE_TRAP): shuffle * 0.55,
+            item(ToontownItemName.TWO_TRACK_DISABLE_TRAP): shuffle * 0.55,
+            item(ToontownItemName.SMALL_GAG_SHUFFLE_TRAP): shuffle * 0.75,
+            item(ToontownItemName.MEDIUM_GAG_SHUFFLE_TRAP): shuffle * 0.75,
+            item(ToontownItemName.GAG_SHUFFLE_TRAP): shuffle * 0.75,
+            item(ToontownItemName.RACING_TRAP): 20,
+            item(ToontownItemName.GOLFING_TRAP): 20,
+        }
+        weights = {key: max(0, float(value)) for key, value in weights.items() if key is not None}
+        trapSlots = max(1, int(self.slotData.get("trap_slot_count", 1) or 1))
+        if oldTotalWeight <= 0:
+            return 1
+        return max(1, int(round(trapSlots * (weights.get(int(itemId), 1) / oldTotalWeight))))
+
     # Sent by the owning client when they press the "use" button on a held trap.
     # We resolve the target ourselves rather than trusting a client-supplied doId --
     # the two AP players won't necessarily share a zone, so the client can't reliably
@@ -5152,9 +5288,39 @@ class DistributedToonAI(DistributedPlayerAI.DistributedPlayerAI, DistributedSmoo
             return
         self.lastTrapUseTime = now
 
-        reflected = (not selfTarget) and target.isTrapReflectActive()
+        if (not selfTarget) and self.hasTrapSkill(SHIELD_DRAIN_TIMER_2X):
+            target.drainActiveTrapTimers(0.5)
+
+        from apworld.toontown import ITEM_NAME_TO_ID, ToontownItemName
+        shieldBreakerIds = {
+            ITEM_NAME_TO_ID.get(ToontownItemName.SHIELD_BREAKER_TRAP.value),
+            ITEM_NAME_TO_ID.get(ToontownItemName.DRIP_TRAP.value),
+        }
+        isShieldBreaker = reward.itemId in shieldBreakerIds
+        reflected = False
+        if (not selfTarget) and target.isTrapReflectActive():
+            breakAmount = 2 if self.hasTrapSkill(SHIELD_BREAKER_2X) else 1
+            if isShieldBreaker:
+                remainingCharges = target.consumeTrapReflectCharge(breakAmount)
+                self.d_sendArchipelagoMessage(
+                    f"{reward.reward.__class__.__name__.replace('Award', '')} broke "
+                    f"{breakAmount} shield durabilit{'y' if breakAmount == 1 else 'ies'} "
+                    f"on {target.getName()}'s Trap Reflect. ({remainingCharges} left.)"
+                )
+                if remainingCharges > 0 or reward.itemId == ITEM_NAME_TO_ID.get(ToontownItemName.SHIELD_BREAKER_TRAP.value):
+                    return
+            else:
+                remainingCharges = target.consumeTrapReflectCharge()
+                if target.hasTrapSkill(SHIELD_BACKFIRE):
+                    reflected = True
+                else:
+                    target.d_sendArchipelagoMessage(f"Your Trap Reflect absorbed {self.getName()}'s trap.")
+                    self.d_sendArchipelagoMessage(
+                        f"{target.getName()}'s Trap Reflect absorbed your trap. "
+                        f"({remainingCharges} reflect{'s' if remainingCharges != 1 else ''} left.)"
+                    )
+                    return
         if reflected:
-            remainingCharges = target.consumeTrapReflectCharge()
             target.d_sendArchipelagoMessage(f"{self.getName()}'s trap bounced off your Trap Reflect!")
             self.d_sendArchipelagoMessage(
                 f"{target.getName()}'s Trap Reflect bounced your trap back at you! "
@@ -5214,19 +5380,27 @@ class DistributedToonAI(DistributedPlayerAI.DistributedPlayerAI, DistributedSmoo
 
         trapNames = [
             ToontownItemName.DRIP_TRAP,
+            ToontownItemName.SHIELD_BREAKER_TRAP,
             ToontownItemName.UBER_TRAP,
+            ToontownItemName.CASHBOT_UBER_TRAP,
+            ToontownItemName.FOUR_GAG_UBER_TRAP,
+            ToontownItemName.THREE_GAG_UBER_TRAP,
             ToontownItemName.BEAN_TAX_TRAP_750,
             ToontownItemName.BEAN_TAX_TRAP_1000,
             ToontownItemName.BEAN_TAX_TRAP_1250,
             ToontownItemName.GAG_SHUFFLE_TRAP,
+            ToontownItemName.SMALL_GAG_SHUFFLE_TRAP,
+            ToontownItemName.MEDIUM_GAG_SHUFFLE_TRAP,
             ToontownItemName.EXPOSE_TRAP,
             ToontownItemName.EXPOSE_BEANS_TRAP,
             ToontownItemName.GAG_DISABLE_TRAP,
             ToontownItemName.RACING_TRAP,
             ToontownItemName.GOLFING_TRAP,
             ToontownItemName.TRAP_REFLECT,
+            ToontownItemName.DAMAGE_10,
             ToontownItemName.DAMAGE_15,
             ToontownItemName.DAMAGE_25,
+            ToontownItemName.TWO_TRACK_DISABLE_TRAP,
             ToontownItemName.RAID_TRAP,
         ]
 
@@ -5283,7 +5457,7 @@ class DistributedToonAI(DistributedPlayerAI.DistributedPlayerAI, DistributedSmoo
         until = int(time.time()) + int(duration)
         self.b_setTrapReflectCharges(charges)
         self.b_setTrapReflectUntil(until)
-        self.d_sendArchipelagoMessage(f"Trap Reflect is active for 3 minutes ({charges} reflects).")
+        self.d_sendArchipelagoMessage(f"Trap Reflect is active for {int(duration)} seconds ({charges} reflects).")
 
     def isTrapReflectActive(self) -> bool:
         if self.trapReflectCharges <= 0 or self.trapReflectUntil <= int(time.time()):
@@ -5292,10 +5466,10 @@ class DistributedToonAI(DistributedPlayerAI.DistributedPlayerAI, DistributedSmoo
             return False
         return True
 
-    def consumeTrapReflectCharge(self) -> int:
+    def consumeTrapReflectCharge(self, amount: int = 1) -> int:
         if not self.isTrapReflectActive():
             return 0
-        remaining = max(0, self.trapReflectCharges - 1)
+        remaining = max(0, self.trapReflectCharges - max(1, int(amount)))
         self.b_setTrapReflectCharges(remaining)
         if remaining <= 0:
             self.clearTrapReflect(sendMessage=True)
@@ -5311,6 +5485,14 @@ class DistributedToonAI(DistributedPlayerAI.DistributedPlayerAI, DistributedSmoo
         self.clearTrapReflect()
         self.d_sendArchipelagoMessage("Trap Reflect has expired.")
         return Task.done
+
+    def drainActiveTrapTimers(self, factor: float):
+        now = int(time.time())
+        factor = max(0.05, min(1.0, float(factor)))
+        if self.trapReflectUntil > now:
+            self.b_setTrapReflectUntil(now + max(1, int((self.trapReflectUntil - now) * factor)))
+        if self.disabledGagTrackUntil > now:
+            self.b_setDisabledGagTrackUntil(now + max(1, int((self.disabledGagTrackUntil - now) * factor)))
 
     def getTrapStrengthPercent(self):
         return getattr(self, 'trapStrengthPercent', 0)
@@ -5332,6 +5514,26 @@ class DistributedToonAI(DistributedPlayerAI.DistributedPlayerAI, DistributedSmoo
 
     def setDisabledGagTrack(self, track: int):
         self.disabledGagTrack = int(track)
+
+    def setDisabledGagTracks(self, tracks):
+        self.disabledGagTracks = sorted({int(track) for track in tracks if 0 <= int(track) < len(ToontownBattleGlobals.Tracks)})
+        self.disabledGagTrack = self.disabledGagTracks[0] if self.disabledGagTracks else 255
+
+    def getDisabledGagTracks(self):
+        if self.disabledGagTrackUntil <= int(time.time()):
+            return []
+        tracks = getattr(self, 'disabledGagTracks', [])
+        if tracks:
+            return list(tracks)
+        track = getattr(self, 'disabledGagTrack', 255)
+        return [] if track == 255 else [track]
+
+    def d_setDisabledGagTracks(self, tracks):
+        self.sendUpdate('setDisabledGagTracks', [self.getDisabledGagTracks()])
+
+    def b_setDisabledGagTracks(self, tracks):
+        self.setDisabledGagTracks(tracks)
+        self.d_setDisabledGagTracks(tracks)
 
     def d_setDisabledGagTrack(self, track: int):
         self.sendUpdate('setDisabledGagTrack', [int(track)])
@@ -5358,28 +5560,36 @@ class DistributedToonAI(DistributedPlayerAI.DistributedPlayerAI, DistributedSmoo
         self.d_setDisabledGagTrackUntil(until)
 
     def isGagTrackDisabled(self, track: int) -> bool:
-        return self.disabledGagTrack == track and self.disabledGagTrackUntil > int(time.time())
+        return track in self.getDisabledGagTracks()
 
-    def activateGagDisableTrap(self, track: int, duration: int):
+    def activateGagDisableTrap(self, tracks, duration: int):
         now = int(time.time())
         if self.gagDisableTrapCooldownUntil > now:
             remaining = self.gagDisableTrapCooldownUntil - now
             self.d_sendArchipelagoMessage(f"Gag Disable Trap is on cooldown for {remaining} seconds.")
             return False
+        if isinstance(tracks, int):
+            tracks = [tracks]
+        tracks = sorted({int(track) for track in tracks if 0 <= int(track) < len(ToontownBattleGlobals.Tracks)})
+        if not tracks:
+            return False
         self.gagDisableTrapCooldownUntil = now + (5 * 60)
         self.gagDisableInventorySnapshot = self.inventory.makeNetString() if self.inventory is not None else None
         self.gagDisableExperienceSnapshot = self.experience.getCurrentExperience() if self.experience is not None else None
         until = int(time.time()) + int(duration)
-        self.b_setDisabledGagTrack(track)
+        self.b_setDisabledGagTracks(tracks)
+        self.b_setDisabledGagTrack(tracks[0])
         self.b_setDisabledGagTrackUntil(until)
-        trackName = ToontownBattleGlobals.Tracks[track]
-        self.d_sendArchipelagoMessage(f"{trackName} gags are disabled for {duration} seconds!")
+        trackNames = ", ".join(ToontownBattleGlobals.Tracks[track] for track in tracks)
+        self.d_sendArchipelagoMessage(f"{trackNames} gags are disabled for {duration} seconds!")
         if self.inventory is not None:
             self.d_setInventory(self.inventory.makeNetString())
         return True
 
     def clearGagDisableTrap(self, sendMessage: bool = False):
         oldTrack = self.disabledGagTrack
+        oldTracks = self.getDisabledGagTracks()
+        self.b_setDisabledGagTracks([])
         self.b_setDisabledGagTrack(255)
         self.b_setDisabledGagTrackUntil(0)
         if self.gagDisableInventorySnapshot is not None:
@@ -5390,8 +5600,9 @@ class DistributedToonAI(DistributedPlayerAI.DistributedPlayerAI, DistributedSmoo
             self.b_setExperience(self.gagDisableExperienceSnapshot)
         self.gagDisableInventorySnapshot = None
         self.gagDisableExperienceSnapshot = None
-        if sendMessage and oldTrack != 255:
-            self.d_sendArchipelagoMessage(f"{ToontownBattleGlobals.Tracks[oldTrack]} gags are usable again.")
+        if sendMessage and oldTracks:
+            trackNames = ", ".join(ToontownBattleGlobals.Tracks[track] for track in oldTracks)
+            self.d_sendArchipelagoMessage(f"{trackNames} gags are usable again.")
 
     def _expireGagDisableTrap(self, task):
         self.clearGagDisableTrap(sendMessage=True)

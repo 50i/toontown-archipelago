@@ -318,7 +318,7 @@ class JSONPartFormatter:
 
         # If we were given name, instead of ID, do same thing basically
         elif part['type'] == 'player_name':
-            part['color'] = 'magenta' if self.client.slot_name == part['text'] else 'yellow'
+            part['color'] = 'green' if self.client.slot_name == part['text'] else 'white'
 
         else:
             print(f"Unknown JSONMessagePart type for player part: {part['type']}")

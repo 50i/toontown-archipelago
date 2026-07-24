@@ -9,6 +9,7 @@ from direct.actor import Actor
 from direct.gui.DirectGui import DirectButton
 from . import ToonInteriorColors
 from toontown.hood import ZoneUtil
+from toontown.archipelago.util.useless_marks import get_marked_hoods, is_hood_marked, set_marked_hoods
 
 class DistributedPetshopInterior(DistributedObject.DistributedObject):
 
@@ -104,7 +105,7 @@ class DistributedPetshopInterior(DistributedObject.DistributedObject):
     def _createUselessPetShopButton(self, hoodId):
         """Offer a local tracker control for pet shops with no useful checks."""
         self.uselessPetShopHoodId = hoodId
-        isMarkedUseless = hoodId in base.settings.get('useless-pet-shop-hoods')
+        isMarkedUseless = is_hood_marked('useless-pet-shop-hoods', hoodId)
         self.uselessPetShopButton = DirectButton(
             parent=base.a2dBottomLeft,
             relief='raised',
@@ -120,11 +121,10 @@ class DistributedPetshopInterior(DistributedObject.DistributedObject):
         )
 
     def markPetShopUseless(self):
-        markedHoods = list(base.settings.get('useless-pet-shop-hoods'))
+        markedHoods = get_marked_hoods('useless-pet-shop-hoods')
         if self.uselessPetShopHoodId not in markedHoods:
             markedHoods.append(self.uselessPetShopHoodId)
-            base.settings.set('useless-pet-shop-hoods', sorted(markedHoods))
-            base.settings.write()
+            set_marked_hoods('useless-pet-shop-hoods', markedHoods)
             # MapPage's refresh callback needs no event arguments.
             messenger.send('petshop-marked-useless')
 
@@ -134,11 +134,10 @@ class DistributedPetshopInterior(DistributedObject.DistributedObject):
         self._createUselessPetShopButton(self.uselessPetShopHoodId)
 
     def unmarkPetShopUseless(self):
-        markedHoods = list(base.settings.get('useless-pet-shop-hoods'))
+        markedHoods = get_marked_hoods('useless-pet-shop-hoods')
         if self.uselessPetShopHoodId in markedHoods:
             markedHoods.remove(self.uselessPetShopHoodId)
-            base.settings.set('useless-pet-shop-hoods', markedHoods)
-            base.settings.write()
+            set_marked_hoods('useless-pet-shop-hoods', markedHoods)
             messenger.send('petshop-marked-useless')
 
         if self.uselessPetShopButton:

@@ -23,5 +23,11 @@ class SetReplyPacket(ClientBoundPacketBase):
     def handle(self, client):
         self.debug("Handling packet")
 
+        if self.key.startswith("ttap:command:") and isinstance(self.value, dict) and self.value.get("type") == "ttap_mutation_result":
+            manager = getattr(getattr(client.av, "air", None), "archipelagoManager", None)
+            if manager is not None:
+                manager.reportMutationResult(repr(self.value))
+            return
+
         if self.key.startswith(f'slot{client.slot}:'):
             client.av.handle_ap_data_update({self.key.split(':')[1]: self.value})

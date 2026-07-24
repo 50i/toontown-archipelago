@@ -1,6 +1,7 @@
 # Represents a gameplay session attached to toon players, handles rewarding and sending items through the multiworld
 import math
 import os
+import time
 from typing import List, TYPE_CHECKING, Any
 
 from toontown.archipelago.apclient.ap_client_enums import APClientEnums
@@ -298,6 +299,36 @@ class ArchipelagoSession:
             packet.operations.append(DataStorageOperation(operation=op, value=value))
         packet.default=default
         self.client.send_packet(packet)
+
+    def send_local_server_command(self, action: str, item_id: int, **payload):
+        if not self.client.is_connected():
+            return False
+        packet = SetPacket()
+        packet.key = f"ttap:command:{self.avatar.doId}:{int(time.time() * 1000)}"
+        packet.default = {
+            "action": action,
+            "item_id": int(item_id),
+            **payload,
+        }
+        packet.want_reply = True
+        packet.operations.append(DataStorageOperation(operation="replace", value=packet.default))
+        self.client.send_packet(packet)
+        return True
+
+    def grant_item_now(self, item_id: int, source_slot: int = None, source_name: str = "", note: str = ""):
+        return self.send_local_server_command(
+            "grant_item",
+            item_id,
+            source_slot=source_slot or self.client.slot,
+            source_name=source_name,
+            note=note,
+        )
+
+    def place_item_in_pool(self, item_id: int, note: str = ""):
+        return self.send_local_server_command("place_item", item_id, note=note)
+
+    def replace_natural_item(self, item_id: int, note: str = ""):
+        return self.send_local_server_command("replace_item", item_id, note=note)
 
 
     """

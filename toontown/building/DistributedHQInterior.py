@@ -10,6 +10,7 @@ from direct.gui.DirectGui import DirectButton
 from . import ToonInteriorColors
 from toontown.toonbase import TTLocalizer
 from toontown.hood import ZoneUtil
+from toontown.archipelago.util.useless_marks import get_marked_hoods, is_hood_marked, set_marked_hoods
 
 class DistributedHQInterior(DistributedObject.DistributedObject):
 
@@ -59,7 +60,7 @@ class DistributedHQInterior(DistributedObject.DistributedObject):
     def _createUselessTaskButton(self):
         """Offer a local tracker control for ToonHQs with no useful tasks."""
         self.uselessTaskHoodId = ZoneUtil.getCanonicalHoodId(self.zoneId)
-        isMarkedUseless = self.uselessTaskHoodId in base.settings.get('useless-toonhq-task-hoods')
+        isMarkedUseless = is_hood_marked('useless-toonhq-task-hoods', self.uselessTaskHoodId)
         self.uselessTaskButton = DirectButton(
             parent=base.a2dBottomLeft,
             relief='raised',
@@ -75,21 +76,19 @@ class DistributedHQInterior(DistributedObject.DistributedObject):
         )
 
     def markTasksUseless(self):
-        markedHoods = list(base.settings.get('useless-toonhq-task-hoods'))
+        markedHoods = get_marked_hoods('useless-toonhq-task-hoods')
         if self.uselessTaskHoodId not in markedHoods:
             markedHoods.append(self.uselessTaskHoodId)
-            base.settings.set('useless-toonhq-task-hoods', sorted(markedHoods))
-            base.settings.write()
+            set_marked_hoods('useless-toonhq-task-hoods', markedHoods)
             messenger.send('toonhq-tasks-marked-useless')
 
         self._refreshUselessTaskButton()
 
     def unmarkTasksUseless(self):
-        markedHoods = list(base.settings.get('useless-toonhq-task-hoods'))
+        markedHoods = get_marked_hoods('useless-toonhq-task-hoods')
         if self.uselessTaskHoodId in markedHoods:
             markedHoods.remove(self.uselessTaskHoodId)
-            base.settings.set('useless-toonhq-task-hoods', markedHoods)
-            base.settings.write()
+            set_marked_hoods('useless-toonhq-task-hoods', markedHoods)
             messenger.send('toonhq-tasks-marked-useless')
 
         self._refreshUselessTaskButton()

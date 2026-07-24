@@ -21,6 +21,9 @@ from toontown.toonbase import ToontownGlobals
 from toontown.toon import NPCToons
 from toontown.chat import ResistanceChat
 from toontown.archipelago.definitions.death_reason import DeathReason
+from toontown.archipelago.definitions.trap_skills import (BEAN_TAX_DAMAGE_1, BEAN_TAX_DAMAGE_2,
+                                                          SHIELD_DURABILITY_2X, SHIELD_TIMER_2X,
+                                                          TRACK_DISABLE_TIMER_2X)
 
 # Typing hack, can remove later
 TYPING = False
@@ -777,6 +780,22 @@ class JellybeanReward(APReward):
     def apply(self, av: "DistributedToonAI", firer: "DistributedToonAI" = None):
         av.addMoney(self.amount)
 
+
+class GlueStickReward(APReward):
+    def __init__(self, amount: int = 1):
+        self.amount = int(amount)
+
+    def formatted_header(self) -> str:
+        label = "Blue Glue Stick" if self.amount == 1 else f"{self.amount} Blue Glue Sticks"
+        return global_text_properties.get_raw_formatted_string([
+            MinimalJsonMessagePart("Found "),
+            MinimalJsonMessagePart(label, color='yellow'),
+            MinimalJsonMessagePart("!\nSpend it in the trap skill tree."),
+        ])
+
+    def apply(self, av: "DistributedToonAI", firer: "DistributedToonAI" = None):
+        av.addTrapSkillPoint(self.amount)
+
     def revoke(self, av: "DistributedToonAI", item_id: int = None):
         av.takeMoney(min(self.amount, av.getMoney()))
         return True
@@ -830,30 +849,63 @@ class DamageTrapAward(APReward, TrapReward):
         av.d_playEmote(EmoteFuncDict['Banana Peel'], 1)
 
 
-class UberTrapAward(APReward, TrapReward):
+class FixedLaffTrapAward(APReward, TrapReward):
+    label = "UBER TRAP"
+
+    def __init__(self, threshold: int):
+        self.threshold = int(threshold)
 
     def formatted_header(self) -> str:
         return global_text_properties.get_raw_formatted_string([
-            MinimalJsonMessagePart("UBER TRAP\n", color='salmon'),
+            MinimalJsonMessagePart(f"{self.label}\n", color='salmon'),
             MinimalJsonMessagePart(f"Will you survive?"),
         ])
 
     def apply(self, av: "DistributedToonAI", firer: "DistributedToonAI" = None):
-        threshold = max(1, math.floor(15 * get_trap_strength_multiplier(firer)))
-        newHp = threshold if av.getHp() > threshold else 0
-        damage = av.getHp() - newHp
+        threshold = max(1, math.floor(self.threshold * get_trap_strength_multiplier(firer)))
+        if av.getMaxHp() <= threshold:
+            damage = 1
+        else:
+            newHp = min(av.getHp(), threshold)
+            damage = av.getHp() - newHp
         if av.getHp() > 0:
             if damage >= av.getHp():
                 av.setDeathReason(DeathReason.DAMAGE_TRAP)
-            av.takeDamage(damage)
+            av.takeDamage(max(1, damage))
         av.inventory.maxInventory(clearFirst=True, restockAmount=20)
         av.b_setInventory(av.inventory.makeNetString())
-        if newHp == 1:
+        if self.threshold <= 15:
             av.playSound('phase_4/audio/sfx/BLACK_KNIGHT.ogg')
         else:
             av.playSound('phase_4/audio/sfx/NO_NO_NO.ogg')
         av.d_broadcastHpString("UBERFIED!", (.35, .7, .35))
         av.d_playEmote(EmoteFuncDict['Cry'], 1)
+
+
+class UberTrapAward(FixedLaffTrapAward):
+    def __init__(self):
+        FixedLaffTrapAward.__init__(self, 15)
+
+
+class CashbotUberTrapAward(FixedLaffTrapAward):
+    label = "CASHBOT UBER TRAP"
+
+    def __init__(self):
+        FixedLaffTrapAward.__init__(self, 76)
+
+
+class FourGagUberTrapAward(FixedLaffTrapAward):
+    label = "4 GAG UBER TRAP"
+
+    def __init__(self):
+        FixedLaffTrapAward.__init__(self, 34)
+
+
+class ThreeGagUberTrapAward(FixedLaffTrapAward):
+    label = "3 GAG UBER TRAP"
+
+    def __init__(self):
+        FixedLaffTrapAward.__init__(self, 25)
 
 
 class ExposeTrapAward(APReward, TrapReward):
@@ -1016,8 +1068,12 @@ class BeanTaxTrapAward(APReward, TrapReward):
         else:
             av.b_setHasPaidTaxes(False)
             av.takeMoney(av.getMoney())
-            damage = max(0, av.getHp() - 1)
-            if av.getHp() > 0:
+            damage = 0
+            if firer is not None and getattr(firer, 'hasTrapSkill', lambda _skillId: False)(BEAN_TAX_DAMAGE_2):
+                damage = max(0, av.getHp() - 1)
+            elif firer is not None and getattr(firer, 'hasTrapSkill', lambda _skillId: False)(BEAN_TAX_DAMAGE_1):
+                damage = min(max(1, math.floor(av.getMaxHp() * 0.25)), max(0, av.getHp() - 1))
+            if damage > 0:
                 av.takeDamage(damage)
             av.playSound('phase_4/audio/sfx/tax_evasion.ogg')
             av.d_broadcastHpString("EVASION ATTEMPTED!", (.3, .5, .8))
@@ -1043,11 +1099,26 @@ class DripTrapAward(APReward, TrapReward):
         av.d_playEmote(EmoteFuncDict['Surprise'], 1)
 
 
-class GagShuffleAward(APReward, TrapReward):
-
+class ShieldBreakerTrapAward(APReward, TrapReward):
     def formatted_header(self) -> str:
         return global_text_properties.get_raw_formatted_string([
-            MinimalJsonMessagePart("GAG SHUFFLE TRAP\n", color='salmon'),
+            MinimalJsonMessagePart("SHIELD BREAKER TRAP\n", color='salmon'),
+            MinimalJsonMessagePart("Breaks Trap Reflect durability."),
+        ])
+
+    def apply(self, av: "DistributedToonAI", firer: "DistributedToonAI" = None):
+        av.playSound('phase_4/audio/sfx/MG_cannon_fire_alt.ogg')
+        av.d_broadcastHpString("SHIELD BREAKER!", (.95, .85, .2))
+
+
+class GagShuffleAward(APReward, TrapReward):
+    def __init__(self, amount: int = 999):
+        self.amount = int(amount)
+
+    def formatted_header(self) -> str:
+        label = "GAG SHUFFLE TRAP" if self.amount >= 999 else f"{self.amount} GAG SHUFFLE TRAP"
+        return global_text_properties.get_raw_formatted_string([
+            MinimalJsonMessagePart(f"{label}\n", color='salmon'),
             MinimalJsonMessagePart(f"Got gags?")
         ])
 
@@ -1060,26 +1131,36 @@ class GagShuffleAward(APReward, TrapReward):
             av.d_playEmote(EmoteFuncDict['Confused'], 1)
             return
 
-        # Clear inventory, set being shuffled, randomly choose gags and add them until we fill up
         av.setBeingShuffled(True)
-        av.inventory.calcTotalProps()  # Might not be necessary, but just to be safe
-        target = av.inventory.totalProps
-        av.inventory.clearInventory()  # Wipe inventory
-        # Get allowed track level pairs
+        av.inventory.calcTotalProps()
+        original = {}
+        for track in range(len(ToontownBattleGlobals.Tracks)):
+            for level in range(len(ToontownBattleGlobals.Levels)):
+                count = av.inventory.numItem(track, level)
+                if count > 0:
+                    original[(track, level)] = count
+        total = sum(original.values())
+        target = total if self.amount >= 999 else min(self.amount, total)
+        removed = 0
+        choices = []
+        for gag, count in original.items():
+            choices.extend([gag] * count)
+        random.shuffle(choices)
+        for track, level in choices[:target]:
+            if av.inventory.numItem(track, level) > 0:
+                av.inventory.useItem(track, level)
+                removed += 1
         allowedGags: List[Tuple[int, int]] = av.experience.getAllowedGagsAndLevels()
-        # Only do enough attempts to fill us back up to what we were
-        for _ in range(target):
-            # Randomly select a gag and attempt to add it
-            if allowedGags:  # sanity check for possible empty list
+        refillTarget = random.randint(0, removed)
+        for _ in range(refillTarget):
+            if allowedGags:
                 gag: Tuple[int, int] = random.choice(allowedGags)
                 track, level = gag
                 gagsAdded = av.inventory.addItem(track, level)
 
-                # If this gag failed to add, we can no longer query for this gag. Remove it.
                 if gagsAdded <= 0:
                     allowedGags.remove(gag)
 
-                # Edge case, if we are out of gags we need to stop (in theory this should never happen but let's be safe :p)
                 if len(allowedGags) <= 0:
                     break
             else:
@@ -1095,6 +1176,7 @@ class GagShuffleAward(APReward, TrapReward):
 
 class GagDisableTrapAward(APReward, TrapReward):
     DURATION_SECONDS = 2 * 60
+    TRACK_COUNT = 1
 
     def formatted_header(self) -> str:
         return global_text_properties.get_raw_formatted_string([
@@ -1111,10 +1193,22 @@ class GagDisableTrapAward(APReward, TrapReward):
         if not availableTracks:
             av.d_sendArchipelagoMessage("A gag disable trap fizzled because you have no gag tracks.")
             return
-        track = random.choice(availableTracks)
+        tracks = random.sample(availableTracks, min(self.TRACK_COUNT, len(availableTracks)))
         duration = max(1, math.floor(self.DURATION_SECONDS * get_trap_strength_multiplier(firer)))
-        if not av.activateGagDisableTrap(track, duration) and firer is not None and firer is not av:
+        if firer is not None and getattr(firer, 'hasTrapSkill', lambda _skillId: False)(TRACK_DISABLE_TIMER_2X):
+            duration *= 2
+        if not av.activateGagDisableTrap(tracks, duration) and firer is not None and firer is not av:
             firer.d_sendArchipelagoMessage("Gag Disable Trap fizzled because the target is on cooldown.")
+
+
+class TwoTrackDisableTrapAward(GagDisableTrapAward):
+    TRACK_COUNT = 2
+
+    def formatted_header(self) -> str:
+        return global_text_properties.get_raw_formatted_string([
+            MinimalJsonMessagePart("2 TRACK DISABLE TRAP\n", color='salmon'),
+            MinimalJsonMessagePart("Temporarily disables two random gag tracks!"),
+        ])
 
 
 class ActivityTrapAward(APReward, TrapReward):
@@ -1215,7 +1309,13 @@ class TrapReflectAward(APReward, TrapReward):
         ])
 
     def apply(self, av: "DistributedToonAI", firer: "DistributedToonAI" = None):
-        av.activateTrapReflect(math.floor(self.DURATION_SECONDS * get_trap_strength_multiplier(firer)), self.CHARGES)
+        duration = math.floor(self.DURATION_SECONDS * get_trap_strength_multiplier(firer))
+        charges = self.CHARGES
+        if av.hasTrapSkill(SHIELD_TIMER_2X):
+            duration *= 2
+        if av.hasTrapSkill(SHIELD_DURABILITY_2X):
+            charges *= 2
+        av.activateTrapReflect(duration, charges)
         av.playSound('phase_4/audio/sfx/SZ_DD_treasure.ogg')
         av.d_broadcastHpString("TRAP REFLECT!", (.95, .85, .2))
         av.d_playEmote(EmoteFuncDict['Resistance Salute'], 1)
@@ -1542,6 +1642,10 @@ ITEM_NAME_TO_AP_REWARD: [str, APReward] = {
     ToontownItemName.MONEY_400.value: JellybeanReward(400),
     ToontownItemName.MONEY_700.value: JellybeanReward(700),
     ToontownItemName.MONEY_1000.value: JellybeanReward(1000),
+    ToontownItemName.GLUE_STICK.value: GlueStickReward(1),
+    ToontownItemName.GLUE_STICKS_2.value: GlueStickReward(2),
+    ToontownItemName.GLUE_STICKS_3.value: GlueStickReward(3),
+    ToontownItemName.TRAP_SLOT_JUNK.value: FishReward(1),
     ToontownItemName.FISH.value: FishReward(1),
     ToontownItemName.XP_10.value: GagExpBundleAward(10),
     ToontownItemName.XP_15.value: GagExpBundleAward(15),
@@ -1555,19 +1659,28 @@ ITEM_NAME_TO_AP_REWARD: [str, APReward] = {
     ToontownItemName.SUMMON_REWARD.value: BossRewardAward(BossRewardAward.SUMMON, 0),
     ToontownItemName.HEAL_10.value: HealAward(10),
     ToontownItemName.HEAL_20.value: HealAward(20),
+    ToontownItemName.BEAN_TAX_TRAP_500.value: BeanTaxTrapAward(500),
     ToontownItemName.UBER_TRAP.value: UberTrapAward(),
+    ToontownItemName.CASHBOT_UBER_TRAP.value: CashbotUberTrapAward(),
+    ToontownItemName.FOUR_GAG_UBER_TRAP.value: FourGagUberTrapAward(),
+    ToontownItemName.THREE_GAG_UBER_TRAP.value: ThreeGagUberTrapAward(),
     ToontownItemName.BEAN_TAX_TRAP_750.value: BeanTaxTrapAward(750),
     ToontownItemName.BEAN_TAX_TRAP_1000.value: BeanTaxTrapAward(1000),
     ToontownItemName.BEAN_TAX_TRAP_1250.value: BeanTaxTrapAward(1250),
     ToontownItemName.DRIP_TRAP.value: DripTrapAward(),
-    ToontownItemName.GAG_SHUFFLE_TRAP.value: GagShuffleAward(),
+    ToontownItemName.SHIELD_BREAKER_TRAP.value: ShieldBreakerTrapAward(),
+    ToontownItemName.SMALL_GAG_SHUFFLE_TRAP.value: GagShuffleAward(10),
+    ToontownItemName.MEDIUM_GAG_SHUFFLE_TRAP.value: GagShuffleAward(25),
+    ToontownItemName.GAG_SHUFFLE_TRAP.value: GagShuffleAward(50),
     ToontownItemName.EXPOSE_TRAP.value: ExposeTrapAward(),
     ToontownItemName.EXPOSE_BEANS_TRAP.value: ExposeBeansTrapAward(),
     ToontownItemName.GAG_DISABLE_TRAP.value: GagDisableTrapAward(),
+    ToontownItemName.TWO_TRACK_DISABLE_TRAP.value: TwoTrackDisableTrapAward(),
     ToontownItemName.RACING_TRAP.value: RacingTrapAward(),
     ToontownItemName.GOLFING_TRAP.value: GolfingTrapAward(),
     ToontownItemName.RAID_TRAP.value: RaidTrapAward(),
     ToontownItemName.TRAP_REFLECT.value: TrapReflectAward(),
+    ToontownItemName.DAMAGE_10.value: DamageTrapAward(10),
     ToontownItemName.DAMAGE_15.value: DamageTrapAward(15),
     ToontownItemName.DAMAGE_25.value: DamageTrapAward(25),
     ToontownItemName.VP.value: ProofReward(0),

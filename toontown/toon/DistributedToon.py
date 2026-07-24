@@ -219,6 +219,7 @@ class DistributedToon(DistributedPlayer.DistributedPlayer, Toon.Toon, Distribute
         self.overflowMod = 100
         self.trapStrengthPercent = 0
         self.disabledGagTrack = 255
+        self.disabledGagTracks = []
         self.disabledGagTrackUntil = 0
         self.accessKeys: List[int] = []
         self.receivedItems: List[Tuple[int, int]] = []
@@ -226,6 +227,8 @@ class DistributedToon(DistributedPlayer.DistributedPlayer, Toon.Toon, Distribute
         self.checkedLocations: List[int] = []
         self.apTradeDebts = []
         self.apBounties = []
+        self.trapSkillPoints = 0
+        self.trapSkills = []
         self.hintPoints = 0
         self.hintCost = 0
         self.battleSpeed = 2
@@ -3098,6 +3101,23 @@ class DistributedToon(DistributedPlayer.DistributedPlayer, Toon.Toon, Distribute
     def d_useHeldTrap(self, index: int) -> None:
         self.sendUpdate('useHeldTrap', [index])
 
+    def setTrapSkillPoints(self, points: int) -> None:
+        self.trapSkillPoints = int(points)
+        messenger.send('ap-trap-skills-updated')
+
+    def getTrapSkillPoints(self) -> int:
+        return int(getattr(self, 'trapSkillPoints', 0))
+
+    def setTrapSkills(self, skills: List[int]) -> None:
+        self.trapSkills = [int(skill) for skill in skills]
+        messenger.send('ap-trap-skills-updated')
+
+    def getTrapSkills(self) -> List[int]:
+        return list(getattr(self, 'trapSkills', []))
+
+    def d_unlockTrapSkill(self, skillId: int) -> None:
+        self.sendUpdate('unlockTrapSkill', [int(skillId)])
+
     def openFixGui(self) -> None:
         if self is not getattr(base, 'localAvatar', None):
             return
@@ -3181,10 +3201,31 @@ class DistributedToon(DistributedPlayer.DistributedPlayer, Toon.Toon, Distribute
 
     def setDisabledGagTrack(self, track: int) -> None:
         self.disabledGagTrack = int(track)
+        if int(track) == 255:
+            self.disabledGagTracks = []
+        elif not getattr(self, 'disabledGagTracks', []):
+            self.disabledGagTracks = [int(track)]
         if self.inventory:
             self.inventory.updateGUI()
         if self is getattr(base, 'localAvatar', None):
             self._refreshGagDisableTimer()
+
+    def setDisabledGagTracks(self, tracks: List[int]) -> None:
+        self.disabledGagTracks = sorted({int(track) for track in tracks})
+        self.disabledGagTrack = self.disabledGagTracks[0] if self.disabledGagTracks else 255
+        if self.inventory:
+            self.inventory.updateGUI()
+        if self is getattr(base, 'localAvatar', None):
+            self._refreshGagDisableTimer()
+
+    def getDisabledGagTracks(self) -> List[int]:
+        if getattr(self, 'disabledGagTrackUntil', 0) <= int(time.time()):
+            return []
+        tracks = getattr(self, 'disabledGagTracks', [])
+        if tracks:
+            return list(tracks)
+        track = getattr(self, 'disabledGagTrack', 255)
+        return [] if track == 255 else [track]
 
     def setDisabledGagTrackUntil(self, until: int) -> None:
         self.disabledGagTrackUntil = int(until)
@@ -3192,18 +3233,17 @@ class DistributedToon(DistributedPlayer.DistributedPlayer, Toon.Toon, Distribute
             self._refreshGagDisableTimer()
 
     def getDisabledGagTrack(self) -> int:
-        if getattr(self, 'disabledGagTrackUntil', 0) <= int(time.time()):
-            return 255
-        return getattr(self, 'disabledGagTrack', 255)
+        tracks = self.getDisabledGagTracks()
+        return tracks[0] if tracks else 255
 
     def isGagTrackDisabled(self, track: int) -> bool:
-        return self.getDisabledGagTrack() == track
+        return int(track) in self.getDisabledGagTracks()
 
     def _refreshGagDisableTimer(self) -> None:
         self._teardownGagDisableTimer()
         remaining = getattr(self, 'disabledGagTrackUntil', 0) - int(time.time())
-        track = getattr(self, 'disabledGagTrack', 255)
-        if remaining <= 0 or track == 255:
+        tracks = self.getDisabledGagTracks()
+        if remaining <= 0 or not tracks:
             return
 
         from direct.gui.DirectGui import DirectLabel
@@ -3216,7 +3256,7 @@ class DistributedToon(DistributedPlayer.DistributedPlayer, Toon.Toon, Distribute
         self.gagDisableTimer.setPos(0.62, 0, 0.74)
         self.gagDisableTimer.countdown(remaining, self._teardownGagDisableTimer)
 
-        trackName = ToontownBattleGlobals.Tracks[track].upper()
+        trackName = "/".join(ToontownBattleGlobals.Tracks[track].upper() for track in tracks)
         self.gagDisableTimerLabel = DirectLabel(
             parent=aspect2dp,
             relief=None,

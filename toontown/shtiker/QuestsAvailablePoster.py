@@ -5,6 +5,7 @@ from apworld.toontown.fish import FishLocation, get_catchable_fish_no_rarity, Fi
 from apworld.toontown import ToontownItemName, get_item_def_from_id
 from toontown.toonbase import ToontownGlobals
 from toontown.archipelago.definitions import util
+from toontown.archipelago.util.useless_marks import is_hood_marked
 
 
 class QuestsAvailablePoster(DirectFrame):
@@ -158,7 +159,7 @@ class PetsAvailablePoster(QuestsAvailablePoster):
         return util.ap_location_name_to_id(ToontownGlobals.ZONE_TO_ID_TO_CHECK[hood][index])
 
     def update(self, av):
-        if self.hoodId in base.settings.get('useless-pet-shop-hoods'):
+        if is_hood_marked('useless-pet-shop-hoods', self.hoodId):
             self.showLocked()
             return
 

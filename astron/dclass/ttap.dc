@@ -1215,12 +1215,16 @@ dclass DistributedToon : DistributedPlayer {
   showReward(int64, string, bool) ownrecv;
   setHeldTraps(APItem[] = []) required ownrecv db;
   useHeldTrap(uint32) ownsend airecv;
+  setTrapSkillPoints(uint16 = 0) required ownrecv db;
+  setTrapSkills(uint16[] = []) required ownrecv db;
+  unlockTrapSkill(uint16) ownsend airecv;
   openFixGui() ownrecv;
   requestFixUnlock(uint64) ownsend airecv;
   setTrapReflectUntil(uint32 = 0) required ownrecv db;
   setTrapReflectCharges(uint8 = 0) required ownrecv db;
   setTrapStrengthPercent(uint8 = 0) required ownrecv db;
   setDisabledGagTrack(uint8 = 255) required ownrecv db;
+  setDisabledGagTracks(uint8[] = []) required ownrecv db;
   setDisabledGagTrackUntil(uint32 = 0) required ownrecv db;
   openRaidTradeGui() ownrecv;
   updateLocationScoutsCache(LocationScoutsCache[]) ownrecv;
@@ -4053,6 +4057,7 @@ dclass DistributedArchipelagoManager : DistributedObject {
   requestTrade(uint32, uint64, uint64, uint64, uint64) clsend airecv;
   requestRaidTrade(uint32, uint64, uint64, uint64, uint64) clsend airecv;
   respondTrade(uint32, uint8) clsend airecv;
+  reportMutationResult(string) clsend airecv;
   showCommunityPoll(uint32, string, uint16) ownrecv;
   clearCommunityPoll(uint32) ownrecv;
   voteCommunityPoll(uint32) clsend airecv;

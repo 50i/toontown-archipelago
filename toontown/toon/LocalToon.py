@@ -36,6 +36,7 @@ from toontown.shtiker import EventsPage
 from toontown.shtiker import TIPPage
 from toontown.shtiker import CheckPage
 from toontown.shtiker import LocationPage
+from toontown.shtiker import TrapSkillPage
 from toontown.quest import Quests
 from toontown.quest import QuestParser
 from toontown.toonbase.ToontownGlobals import *
@@ -286,6 +287,7 @@ class LocalToon(DistributedToon.DistributedToon, LocalAvatar.LocalAvatar):
         del self.invPage
         del self.questPage
         del self.bountyPage
+        del self.trapSkillPage
         del self.suitPage
         del self.sosPage
         del self.disguisePage
@@ -377,6 +379,9 @@ class LocalToon(DistributedToon.DistributedToon, LocalAvatar.LocalAvatar):
         self.bountyPage = BountyPage.BountyPage()
         self.bountyPage.load()
         self.book.addPage(self.bountyPage, pageName=TTLocalizer.BountyPageTitle)
+        self.trapSkillPage = TrapSkillPage.TrapSkillPage()
+        self.trapSkillPage.load()
+        self.book.addPage(self.trapSkillPage, pageName=TTLocalizer.TrapSkillPageTitle)
         self.suitPage = SuitPage.SuitPage()
         self.suitPage.load()
         self.book.addPage(self.suitPage, pageName=TTLocalizer.SuitPageTitle)

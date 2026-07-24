@@ -71,6 +71,7 @@ class TrapsGUI(DirectFrame):
         )
 
         self.trapButtons = []
+        self.heldTrapsCache = []
         self.hide()
         self._loadToggleButton()
 
@@ -102,6 +103,7 @@ class TrapsGUI(DirectFrame):
     # Called from DistributedToon.setHeldTraps whenever the server pushes an
     # updated held-trap list (list of (index, itemId) tuples)
     def refresh(self, heldTraps):
+        self.heldTrapsCache = heldTraps
         for btn in self.trapButtons:
             btn.destroy()
         self.trapButtons.clear()

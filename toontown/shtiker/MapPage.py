@@ -12,6 +12,7 @@ from panda3d.core import *
 from toontown.toonbase import TTLocalizer
 from .QuestsAvailablePoster import QuestsAvailablePoster, FishAvailablePoster, TreasureAvailablePoster, PetsAvailablePoster, CanRacePoster, CanGolfPoster
 from ..building import FADoorCodes
+from toontown.archipelago.util.useless_marks import is_hood_marked
 
 
 class MapPage(ShtikerPage.ShtikerPage):
@@ -236,7 +237,7 @@ class MapPage(ShtikerPage.ShtikerPage):
             if hoodId in FADoorCodes.PLAYGROUND_ZONES:
                 if FADoorCodes.ZONE_TO_ACCESS_CODE[hoodId] not in base.localAvatar.getAccessKeys():
                     questPoster.showLocked()
-                elif hoodId in base.settings.get('useless-toonhq-task-hoods'):
+                elif is_hood_marked('useless-toonhq-task-hoods', hoodId):
                     questPoster.showLocked()
                 else:
                     # Get the reward IDs from this playground

@@ -351,6 +351,9 @@ class DistributedArchipelagoManager(DistributedObject):
     def d_respondTrade(self, requesterAvId, accepted):
         self.sendUpdate('respondTrade', [requesterAvId, 1 if accepted else 0])
 
+    def d_reportMutationResult(self, result):
+        self.sendUpdate('reportMutationResult', [result])
+
     def tradeRequest(self, requesterAvId, requesterName, offerIndex, offerItemId, requestedItemId, offerName, requestedName):
         self._cleanupTradeDialog()
         self._tradeRequesterAvId = requesterAvId
