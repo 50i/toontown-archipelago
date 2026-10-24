@@ -54,6 +54,8 @@ class ToonAvatarDetailPanel(DirectFrame):
         textScale = 0.095
         textWrap = 16.4
         self.playerInfo = None
+        self.detailWidgets = []
+        self.gotoAvatarButton = None
         if self.playerId:
             self.playerInfo = base.cr.playerFriendsManager.playerId2Info.get(playerId)
         optiondefs = (('pos', (-0.808333, 0, -0.475), None),
@@ -72,6 +74,7 @@ class ToonAvatarDetailPanel(DirectFrame):
         self.avName = avName
         self.avatar = None
         self.createdAvatar = None
+        self.detailsRequestPending = False
         self.fsm = ClassicFSM.ClassicFSM('ToonAvatarDetailPanel', [State.State('off', self.enterOff, self.exitOff, ['begin']),
          State.State('begin', self.enterBegin, self.exitBegin, ['query', 'data', 'off']),
          State.State('query', self.enterQuery, self.exitQuery, ['data', 'invalid', 'off']),
@@ -92,6 +95,7 @@ class ToonAvatarDetailPanel(DirectFrame):
         return
 
     def cleanup(self):
+        taskMgr.remove(self.uniqueName('detail-refresh'))
         if self.fsm:
             self.fsm.request('off')
             self.fsm = None
@@ -132,6 +136,7 @@ class ToonAvatarDetailPanel(DirectFrame):
             self.createdAvatar = 1
             self.avatar.doId = self.avId
             self.avatar.forceAllowDelayDelete()
+        self.detailsRequestPending = True
         base.cr.getAvatarDetails(self.avatar, self.__handleAvatarDetails, 'DistributedToon')
         return
 
@@ -142,9 +147,23 @@ class ToonAvatarDetailPanel(DirectFrame):
         self.bCancel['text'] = TTLocalizer.AvatarDetailPanelClose
         self.bCancel.show()
         self.__showData()
+        taskMgr.remove(self.uniqueName('detail-refresh'))
+        taskMgr.doMethodLater(3.0, self.__refreshDetails, self.uniqueName('detail-refresh'))
 
     def exitData(self):
+        taskMgr.remove(self.uniqueName('detail-refresh'))
         self.bCancel.hide()
+
+    def __refreshDetails(self, task):
+        if not self.fsm or self.fsm.getCurrentState().getName() != 'data':
+            return task.done
+        if self.createdAvatar:
+            if not self.detailsRequestPending:
+                self.detailsRequestPending = True
+                base.cr.getAvatarDetails(self.avatar, self.__handleAvatarDetails, 'DistributedToon')
+        else:
+            self.__showData()
+        return task.again
 
     def enterInvalid(self):
         self.dataText['text'] = TTLocalizer.AvatarDetailPanelFailedLookup % self.avName
@@ -156,15 +175,28 @@ class ToonAvatarDetailPanel(DirectFrame):
         unloadAvatarDetail()
 
     def __handleAvatarDetails(self, gotData, avatar, dclass):
+        self.detailsRequestPending = False
         if not self.fsm or avatar != self.avatar:
             self.notify.warning('Ignoring unexpected request for avatar %s' % avatar.doId)
             return
         if gotData:
-            self.fsm.request('data')
+            if self.fsm.getCurrentState().getName() == 'data':
+                self.__showData()
+            else:
+                self.fsm.request('data')
         else:
             self.fsm.request('invalid')
 
     def __showData(self):
+        for widget in self.detailWidgets:
+            widget.destroy()
+        self.detailWidgets = []
+        if self.gotoAvatarButton is not None:
+            self.gotoAvatarButton.destroy()
+            self.gotoAvatarButton = None
+        if getattr(self, 'star', None) is not None:
+            self.star.destroy()
+            self.star = None
         av = self.avatar
         online = 1
         if base.cr.isFriend(self.avId):
@@ -177,6 +209,7 @@ class ToonAvatarDetailPanel(DirectFrame):
             if self.playerInfo:
                 guiButton = loader.loadModel('phase_3/models/gui/quit_button')
                 self.gotoAvatarButton = DirectButton(parent=self, relief=None, image=(guiButton.find('**/QuitBtn_UP'), guiButton.find('**/QuitBtn_DN'), guiButton.find('**/QuitBtn_RLVR')), image_scale=1.1, text=TTLocalizer.AvatarShowPlayer, text_scale=0.07, text_pos=(0.0, -0.02), textMayChange=0, pos=(0.44, 0, 0.41), command=self.__showAvatar)
+                guiButton.removeNode()
                 text = TTLocalizer.AvatarDetailPanelOnlinePlayer % {'district': shardName,
                  'location': hoodName,
                  'player': self.playerInfo.playerName}
@@ -218,6 +251,7 @@ class ToonAvatarDetailPanel(DirectFrame):
             # DirectLabel(parent=self, relief=None, text=TextEncoder.upper(TTLocalizer.BattleGlobalTracks[track]), text_scale=TTLocalizer.TADPtrackLabel, text_align=TextNode.ALeft, pos=(-0.9, 0, TTLocalizer.TADtrackLabelPosZ + track * ySpacing))
             if self.avatar.hasTrackAccess(track):
                 gagTrackBar = GagTrackBarGUI(track, parent=self, scale=0.25, pos=(-0.76, 0, TTLocalizer.TADtrackLabelPosZ + track * ySpacing))
+                self.detailWidgets.append(gagTrackBar)
                 # gagTrackBar.makeSkinny()
                 gagTrackBar.showExperience(self.avatar.experience, track)
                 curExp, nextExp = inventory.getCurAndNextExpValues(track)
@@ -234,7 +268,8 @@ class ToonAvatarDetailPanel(DirectFrame):
                         else:
                             image_color = Vec4(0, 0.6, 1, 1)
                             geom_color = None
-                        DirectLabel(parent=self, image=buttonModel, text=f"{numItems}", text_font=ToontownGlobals.getSignFont(), text_scale=.08, text_align=TextNode.ACenter, text_pos=(.045, -.045), text_fg=(1, 1, 1, 1), text_shadow=(0, 0, 0, 1), image_scale=(0.92, 1, 1), image_color=image_color, geom=inventory.invModels[track][item], geom_color=geom_color, geom_scale=0.6, relief=None, pos=(xOffset + item * xSpacing, 0, yOffset + track * ySpacing))
+                        gagLabel = DirectLabel(parent=self, image=buttonModel, text=f"{numItems}", text_font=ToontownGlobals.getSignFont(), text_scale=.08, text_align=TextNode.ACenter, text_pos=(.045, -.045), text_fg=(1, 1, 1, 1), text_shadow=(0, 0, 0, 1), image_scale=(0.92, 1, 1), image_color=image_color, geom=inventory.invModels[track][item], geom_color=geom_color, geom_scale=0.6, relief=None, pos=(xOffset + item * xSpacing, 0, yOffset + track * ySpacing))
+                        self.detailWidgets.append(gagLabel)
                     else:
                         break
 

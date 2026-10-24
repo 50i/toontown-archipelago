@@ -851,6 +851,7 @@ class DamageTrapAward(APReward, TrapReward):
 
 class FixedLaffTrapAward(APReward, TrapReward):
     label = "UBER TRAP"
+    scale_with_trap_strength = True
 
     def __init__(self, threshold: int):
         self.threshold = int(threshold)
@@ -862,7 +863,8 @@ class FixedLaffTrapAward(APReward, TrapReward):
         ])
 
     def apply(self, av: "DistributedToonAI", firer: "DistributedToonAI" = None):
-        threshold = max(1, math.floor(self.threshold * get_trap_strength_multiplier(firer)))
+        multiplier = get_trap_strength_multiplier(firer) if self.scale_with_trap_strength else 1.0
+        threshold = max(1, math.floor(self.threshold * multiplier))
         if av.getMaxHp() <= threshold:
             damage = 1
         else:
@@ -889,9 +891,10 @@ class UberTrapAward(FixedLaffTrapAward):
 
 class CashbotUberTrapAward(FixedLaffTrapAward):
     label = "CASHBOT UBER TRAP"
+    scale_with_trap_strength = False
 
     def __init__(self):
-        FixedLaffTrapAward.__init__(self, 76)
+        FixedLaffTrapAward.__init__(self, 64)
 
 
 class FourGagUberTrapAward(FixedLaffTrapAward):
@@ -941,7 +944,7 @@ class ExposeTrapAward(APReward, TrapReward):
         from toontown.hood import ZoneUtil
         from toontown.toonbase import ToontownGlobals
 
-        zoneId = av.zoneId
+        zoneId = ZoneUtil.getCanonicalZoneId(av.zoneId)
         hoodId = ZoneUtil.getHoodId(zoneId)
 
         HOOD_NAMES = {
@@ -977,9 +980,14 @@ class ExposeTrapAward(APReward, TrapReward):
             ToontownGlobals.BossbotCountryClubIntA: "inside the Front Three golf course",
             ToontownGlobals.BossbotCountryClubIntB: "inside the Middle Six golf course",
             ToontownGlobals.BossbotCountryClubIntC: "inside the Back Nine golf course",
+            ToontownGlobals.LawbotStageIntA: "inside DA Office A",
+            ToontownGlobals.LawbotStageIntB: "inside DA Office B",
+            ToontownGlobals.LawbotStageIntC: "inside DA Office C",
+            ToontownGlobals.LawbotStageIntD: "inside DA Office D",
         }
-        if zoneId in COG_FACILITY_ZONES:
-            return COG_FACILITY_ZONES[zoneId]
+        facilityZoneId = ZoneUtil.getBranchZone(zoneId) if ZoneUtil.isCogHQZone(zoneId) else zoneId
+        if facilityZoneId in COG_FACILITY_ZONES:
+            return COG_FACILITY_ZONES[facilityZoneId]
         if hoodId == ToontownGlobals.GolfZone:
             return "at the golf course"
         if hoodId in COG_HQ_HOODS and zoneId != hoodId:

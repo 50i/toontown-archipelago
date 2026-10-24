@@ -110,14 +110,16 @@ class DistributedPetshopInterior(DistributedObject.DistributedObject):
             parent=base.a2dBottomLeft,
             relief='raised',
             frameColor=(0.35, 0.55, 0.35, 1) if isMarkedUseless else (0.8, 0.25, 0.25, 1),
-            frameSize=(-2.0, 2.0, -0.85, 0.85),
-            scale=0.15,
-            pos=(0.34, 0, 0.48),
+            frameSize=(-1.35, 1.35, -0.4, 0.4),
+            scale=0.14,
+            pos=(0.28, 0, 0.42),
             text='Unmark\nDoodles' if isMarkedUseless else 'Mark Doodles\nUseless',
-            text_scale=0.22,
-            text_wordwrap=9,
+            text_scale=0.28,
+            text_wordwrap=12,
             text_align=TextNode.ACenter,
             command=self.unmarkPetShopUseless if isMarkedUseless else self.markPetShopUseless,
+            state='normal',
+            sortOrder=1000,
         )
 
     def markPetShopUseless(self):

@@ -49,6 +49,9 @@ class ConnectedPacket(ClientBoundPacketBase):
         # Number of hint points that the current player has.
         self.hint_points: int = self.read_raw_field('hint_points', ignore_missing=True)
 
+        # Safe, unused treasure checks available for trade recovery.
+        self.trade_recovery_locations: List[int] = self.read_raw_field('trade_recovery_locations', ignore_missing=True) or []
+
     def get_slot_info(self, slot: int) -> NetworkSlot:
         return self.slot_info[str(slot)]
 
@@ -74,6 +77,8 @@ class ConnectedPacket(ClientBoundPacketBase):
         client.all_locations = self.missing_locations + self.checked_locations
         client.missing_locations = list(self.missing_locations)
         client.checked_locations = list(self.checked_locations)
+        client.trade_recovery_locations = list(self.trade_recovery_locations)
+        client.reserved_trade_recovery_locations.clear()
 
         # Cache this successful connection on the ai
         slot_info = self.get_slot_info(self.slot)

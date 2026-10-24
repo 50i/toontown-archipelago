@@ -55,7 +55,10 @@ class DistributedArchipelagoManagerAI(DistributedObjectAI):
         return task.done
 
     def __getPollParticipants(self):
-        return [toon for toon in self.air.doFindAllInstances(DistributedToonAI) if toon.isPlayerControlled()]
+        return [
+            toon for toon in self.air.doFindAllInstances(DistributedToonAI)
+            if toon.isPlayerControlled() and self.__getSession(toon.doId) is not None
+        ]
 
     def startCommunityPoll(self):
         """Start one shared poll. Also invoked by the developer testing magic word."""
@@ -69,6 +72,8 @@ class DistributedArchipelagoManagerAI(DistributedObjectAI):
             return False
 
         outcome = random.choice(('grant_both', 'grant_one', 'trap_one', 'trap_both'))
+        if outcome.startswith('grant') and self.__choosePollItem(participants) is None:
+            outcome = random.choice(('trap_one', 'trap_both'))
         payload, description = self.__createCommunityPollPayload(outcome, participants)
         self.__communityPollSequence += 1
         pollId = self.__communityPollSequence
@@ -139,12 +144,19 @@ class DistributedArchipelagoManagerAI(DistributedObjectAI):
             ToontownItemName.CEO,
         }
         licensesEnabled = all(self.__usesFishingLicenses(toon) for toon in targets)
-        return random.choice([
+        ownedItemIds = {
+            itemId
+            for toon in targets
+            for _index, itemId in toon.getReceivedItems()
+        }
+        choices = [
             itemDef for itemDef in ITEM_DEFINITIONS
             if not isinstance(get_ap_reward_from_id(itemDef.unique_id), TrapReward)
             and itemDef.name not in excludedItems
+            and itemDef.unique_id not in ownedItemIds
             and (itemDef.name not in FISHING_LICENSES or licensesEnabled)
-        ])
+        ]
+        return random.choice(choices) if choices else None
 
     def __choosePollTrap(self):
         return random.choice([itemDef for itemDef in ITEM_DEFINITIONS
@@ -154,9 +166,14 @@ class DistributedArchipelagoManagerAI(DistributedObjectAI):
     def __createCommunityPollPayload(self, outcome, participants):
         if outcome == 'grant_both':
             itemDef = self.__choosePollItem(participants)
+            if itemDef is None:
+                return {'itemId': 0, 'targetIds': []}, 'No unowned items remain'
             return {'itemId': itemDef.unique_id, 'targetIds': [toon.doId for toon in participants]}, f"Grant {itemDef.name.value} to both Toons"
         if outcome == 'grant_one':
-            target = random.choice(participants)
+            eligibleTargets = [toon for toon in participants if self.__choosePollItem([toon]) is not None]
+            if not eligibleTargets:
+                return {'itemId': 0, 'targetIds': []}, 'No unowned items remain'
+            target = random.choice(eligibleTargets)
             itemDef = self.__choosePollItem([target])
             return {'itemId': itemDef.unique_id, 'targetIds': [target.doId]}, f"Grant {itemDef.name.value} to {target.getName()}"
 
@@ -166,12 +183,18 @@ class DistributedArchipelagoManagerAI(DistributedObjectAI):
         return {'itemId': trapDef.unique_id, 'targetIds': [toon.doId for toon in targets]}, f"Trigger {trapDef.name.value} on {targetNames}"
 
     def __grantPollItem(self, toon, itemDef):
+        session = getattr(toon, 'archipelago_session', None)
         rewardIndex = int(time.time() * 1000000) + toon.doId
         usedIndexes = {index for index, _itemId in toon.getReceivedItems()}
         while rewardIndex in usedIndexes:
             rewardIndex += 1
         toon.queueAPReward(EarnedAPReward(toon, get_ap_reward_from_id(itemDef.unique_id), rewardIndex, itemDef.unique_id, 'Community Poll', True))
         toon.addReceivedItem(rewardIndex, itemDef.unique_id)
+        if session is not None and session.client.state == APClientEnums.CONNECTED:
+            session.replace_natural_item(
+                itemDef.unique_id,
+                note=f"Community poll duplicate replacement: {itemDef.name.value}",
+            )
 
     def __applyCommunityPollOutcome(self, poll, participants):
         itemDef = get_item_def_from_id(poll['payload']['itemId'])
@@ -179,6 +202,18 @@ class DistributedArchipelagoManagerAI(DistributedObjectAI):
         targets = [toon for toon in targets if toon is not None and toon.isPlayerControlled()]
         if itemDef is None or not targets:
             return 'Nothing happened because the selected Toon was no longer online.'
+
+        if poll['outcome'].startswith('grant'):
+            ownedItemIds = {
+                itemId
+                for toon in targets
+                for _index, itemId in toon.getReceivedItems()
+            }
+            if itemDef.unique_id in ownedItemIds:
+                itemDef = self.__choosePollItem(targets)
+                if itemDef is None:
+                    return 'No unowned items remained when the poll resolved.'
+                poll['payload']['itemId'] = itemDef.unique_id
 
         targetNames = ', '.join(toon.getName() for toon in targets)
         if poll['outcome'].startswith('grant'):
@@ -614,6 +649,19 @@ class DistributedArchipelagoManagerAI(DistributedObjectAI):
             self.__sendTradeResult(targetAvId, "Trade cancelled because both players must be connected to Archipelago.")
             return
 
+        requesterRecoveryLocations = requesterSession.get_trade_recovery_locations()
+        targetRecoveryLocations = targetSession.get_trade_recovery_locations()
+        requesterRecoveryLocation = requesterSession.pick_trade_recovery_location()
+        targetRecoveryLocation = targetSession.pick_trade_recovery_location()
+        if requesterRecoveryLocation is None or targetRecoveryLocation is None:
+            if requesterRecoveryLocation is not None:
+                requesterSession.release_trade_recovery_location(requesterRecoveryLocation)
+            if targetRecoveryLocation is not None:
+                targetSession.release_trade_recovery_location(targetRecoveryLocation)
+            self.__sendTradeResult(requesterAvId, "Trade cancelled: both players need an unused, reachable safe recovery check.")
+            self.__sendTradeResult(targetAvId, "Trade cancelled: both players need an unused, reachable safe recovery check.")
+            return
+
         offerReward = get_ap_reward_from_id(offerItemId)
         requestedReward = get_ap_reward_from_id(requestedItemId)
 
@@ -621,6 +669,8 @@ class DistributedArchipelagoManagerAI(DistributedObjectAI):
         targetRemoval = self.__removeTradedItemFromOwner(target, requestedReward, requestedIndex, requestedItemId)
 
         if requesterRemoval is None or targetRemoval is None:
+            requesterSession.release_trade_recovery_location(requesterRecoveryLocation)
+            targetSession.release_trade_recovery_location(targetRecoveryLocation)
             if requesterRemoval is not None:
                 self.__restoreRemovedTradedItem(requester, offerReward, offerIndex, offerItemId, requesterRemoval)
             if targetRemoval is not None:
@@ -635,8 +685,16 @@ class DistributedArchipelagoManagerAI(DistributedObjectAI):
 
         requesterSession.grant_item_now(requestedItemId, source_slot=targetSession.getSlotId(), source_name=target.getName(), note=f"Trade from {target.getName()}")
         targetSession.grant_item_now(offerItemId, source_slot=requesterSession.getSlotId(), source_name=requester.getName(), note=f"Trade from {requester.getName()}")
-        requesterSession.place_item_in_pool(offerItemId, note=f"Trade recovery: {offerName}")
-        targetSession.place_item_in_pool(requestedItemId, note=f"Trade recovery: {requestedName}")
+        requesterSession.place_item_in_pool(
+            offerItemId, note=f"Trade recovery: {offerName}", location_id=requesterRecoveryLocation,
+            fallback_location_ids=[location for location in requesterRecoveryLocations
+                                   if location != requesterRecoveryLocation],
+        )
+        targetSession.place_item_in_pool(
+            requestedItemId, note=f"Trade recovery: {requestedName}", location_id=targetRecoveryLocation,
+            fallback_location_ids=[location for location in targetRecoveryLocations
+                                   if location != targetRecoveryLocation],
+        )
         requesterSession.replace_natural_item(requestedItemId, note=f"Trade duplicate replacement: {requestedName}")
         targetSession.replace_natural_item(offerItemId, note=f"Trade duplicate replacement: {offerName}")
 

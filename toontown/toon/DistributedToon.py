@@ -1119,6 +1119,7 @@ class DistributedToon(DistributedPlayer.DistributedPlayer, Toon.Toon, Distribute
     def setFishCollection(self, genusList, speciesList, weightList):
         self.fishCollection = FishCollection.FishCollection()
         self.fishCollection.makeFromNetLists(genusList, speciesList, weightList)
+        messenger.send('fishCollectionChanged')
 
     def getFishCollection(self):
         return self.fishCollection
@@ -3052,6 +3053,7 @@ class DistributedToon(DistributedPlayer.DistributedPlayer, Toon.Toon, Distribute
 
     def setCheckedLocations(self, checkedLocations: List[int]) -> None:
         self.checkedLocations = checkedLocations
+        messenger.send('archipelago-locations-updated')
 
     def getCheckedLocations(self) -> List[int]:
         return self.checkedLocations

@@ -121,6 +121,24 @@ class LocationPage(ShtikerPage.ShtikerPage):
         self.LocationNode.showDefaultDisplay()
         self.logicalLocationsLabel['text'] = f"Locations in Logic: {self.logicalLocations}"
         self.selectedLocation = None
+        self.accept('archipelago-items-updated', self.refreshLocations)
+        self.accept('archipelago-locations-updated', self.refreshLocations)
+        self.accept('ap-trap-skills-updated', self.refreshLocations)
+
+    def refreshLocations(self, *_unusedEventArgs):
+        if self.isHidden():
+            return
+        self.getLocations()
+        self.regenerateScrollList()
+        self.logicalLocationsLabel['text'] = f"Locations in Logic: {self.logicalLocations}"
+        self.LocationNode.showDefaultDisplay()
+        self.selectedLocation = None
+
+    def exit(self):
+        self.ignore('archipelago-items-updated')
+        self.ignore('archipelago-locations-updated')
+        self.ignore('ap-trap-skills-updated')
+        ShtikerPage.ShtikerPage.exit(self)
 
     def getLocations(self):
         # Get our checked locations

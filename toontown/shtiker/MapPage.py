@@ -321,8 +321,16 @@ class MapPage(ShtikerPage.ShtikerPage):
                 self.hoodLabel.hide()
         else:
             self.hoodLabel.hide()
-        self.accept('archipelago-items-updated', self._refreshAccessClouds)
+        self.accept('archipelago-items-updated', self._refreshMapItems)
+        self.accept('archipelago-locations-updated', self.updateTasksAvailableFrames)
+        self.accept('questsChanged', self.updateTasksAvailableFrames)
+        self.accept('petStateUpdated', self.updateTasksAvailableFrames)
+        self.accept('fishCollectionChanged', self.updateTasksAvailableFrames)
         self._refreshAccessClouds()
+
+    def _refreshMapItems(self, *_unusedEventArgs):
+        self._refreshAccessClouds()
+        self.updateTasksAvailableFrames()
 
     def _refreshAccessClouds(self):
         safeZonesVisited = base.localAvatar.hoodsVisited
@@ -363,6 +371,10 @@ class MapPage(ShtikerPage.ShtikerPage):
 
     def exit(self):
         self.ignore('archipelago-items-updated')
+        self.ignore('archipelago-locations-updated')
+        self.ignore('questsChanged')
+        self.ignore('petStateUpdated')
+        self.ignore('fishCollectionChanged')
         ShtikerPage.ShtikerPage.exit(self)
 
     def backToSafeZone(self):

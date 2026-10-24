@@ -14,8 +14,9 @@ from typing import List, Dict, Union, Optional
 import certifi
 from websockets import ConnectionClosed, InvalidURI, InvalidMessage
 from websockets.sync.client import connect, ClientConnection
+from BaseClasses import MultiWorld
 
-from apworld.toontown import locations, get_item_def_from_id
+from apworld.toontown import locations, get_item_def_from_id, test_location
 from apworld.toontown.locations import LOCATION_ID_TO_NAME
 from apworld.toontown.options import RewardDisplayOption
 from apworld.toontown.regions import ToontownRegionName
@@ -88,6 +89,8 @@ class ArchipelagoClient(DirectObject):
         self.all_locations = []
         self.missing_locations = []
         self.checked_locations = []
+        self.trade_recovery_locations = []
+        self.reserved_trade_recovery_locations = set()
 
     def has_slot_info(self, slot_id: int) -> bool:
         return slot_id in self.slot_id_to_slot_name
@@ -431,13 +434,47 @@ class ArchipelagoClient(DirectObject):
         self.__scout_locations_in_chunks(self.missing_locations or self.all_locations)
         return True
 
-    def pick_trade_recovery_location(self):
-        candidates = self.__filter_recovery_locations(self.missing_locations)
+    def get_trade_recovery_locations(self):
+        checked = set(self.av.getCheckedLocations())
+        candidates = [
+            int(location_id) for location_id in self.trade_recovery_locations
+            if int(location_id) not in self.reserved_trade_recovery_locations
+            and int(location_id) not in checked
+            and self.__is_trade_recovery_location_safe(int(location_id))
+        ]
         if not candidates:
-            candidates = self.__filter_recovery_locations(self.all_locations)
+            return []
+
+        checked_by_region = {}
+        for checked_id in checked:
+            try:
+                region = ap_location_to_definition(checked_id).region
+            except KeyError:
+                continue
+            checked_by_region[region] = checked_by_region.get(region, 0) + 1
+
+        by_usage = {}
+        for location_id in candidates:
+            region = ap_location_to_definition(location_id).region
+            usage = checked_by_region.get(region, 0)
+            by_usage.setdefault(usage, []).append(location_id)
+        ranked = []
+        for usage in sorted(by_usage):
+            group = by_usage[usage]
+            random.shuffle(group)
+            ranked.extend(group)
+        return ranked
+
+    def pick_trade_recovery_location(self):
+        candidates = self.get_trade_recovery_locations()
         if not candidates:
             return None
-        return random.choice(candidates)
+        location_id = candidates[0]
+        self.reserved_trade_recovery_locations.add(location_id)
+        return location_id
+
+    def release_trade_recovery_location(self, location_id):
+        self.reserved_trade_recovery_locations.discard(int(location_id))
 
     def __filter_recovery_locations(self, location_ids):
         checked = set(self.av.getCheckedLocations())
@@ -483,12 +520,21 @@ class ArchipelagoClient(DirectObject):
             ToontownRegionName.TRAINING,
             ToontownRegionName.BUILDINGS,
         ):
-            return True
-        if location_def.region == ToontownRegionName.TTC:
-            return True
+            region_is_accessible = True
+        elif location_def.region == ToontownRegionName.TTC:
+            region_is_accessible = True
+        else:
+            hood = region_to_hood.get(location_def.region)
+            region_is_accessible = hood is not None and self.av.hasTeleportAccess(hood)
 
-        hood = region_to_hood.get(location_def.region)
-        return hood is not None and self.av.hasTeleportAccess(hood)
+        if not region_is_accessible:
+            return False
+        try:
+            return test_location(
+                location_def, self.av, MultiWorld, 1, self.av.slotData
+            )
+        except Exception:
+            return False
 
     def describe_location(self, location_id: int) -> str:
         try:

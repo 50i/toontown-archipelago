@@ -5575,7 +5575,7 @@ class DistributedToonAI(DistributedPlayerAI.DistributedPlayerAI, DistributedSmoo
             return False
         self.gagDisableTrapCooldownUntil = now + (5 * 60)
         self.gagDisableInventorySnapshot = self.inventory.makeNetString() if self.inventory is not None else None
-        self.gagDisableExperienceSnapshot = self.experience.getCurrentExperience() if self.experience is not None else None
+        self.gagDisableExperienceSnapshot = list(self.experience.getCurrentExperience()) if self.experience is not None else None
         until = int(time.time()) + int(duration)
         self.b_setDisabledGagTracks(tracks)
         self.b_setDisabledGagTrack(tracks[0])

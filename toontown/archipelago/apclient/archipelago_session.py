@@ -324,8 +324,23 @@ class ArchipelagoSession:
             note=note,
         )
 
-    def place_item_in_pool(self, item_id: int, note: str = ""):
-        return self.send_local_server_command("place_item", item_id, note=note)
+    def place_item_in_pool(self, item_id: int, note: str = "", location_id: int = None,
+                           fallback_location_ids=None):
+        payload = {"note": note}
+        if location_id is not None:
+            payload["location_id"] = int(location_id)
+        if fallback_location_ids:
+            payload["fallback_location_ids"] = [int(value) for value in fallback_location_ids]
+        return self.send_local_server_command("place_item", item_id, **payload)
+
+    def pick_trade_recovery_location(self):
+        return self.client.pick_trade_recovery_location()
+
+    def get_trade_recovery_locations(self):
+        return self.client.get_trade_recovery_locations()
+
+    def release_trade_recovery_location(self, location_id: int):
+        self.client.release_trade_recovery_location(location_id)
 
     def replace_natural_item(self, item_id: int, note: str = ""):
         return self.send_local_server_command("replace_item", item_id, note=note)
